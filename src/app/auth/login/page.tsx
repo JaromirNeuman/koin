@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState } from "react";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { KoinLogo } from "@/components/koin-logo";
@@ -12,6 +12,8 @@ import {
   usePageTransition,
   TransitionLink,
 } from "@/components/layout/page-transition";
+import { AuthBackgroundCards } from "@/components/layout/auth-bg-cards";
+import { createClient } from "@/lib/supabase/client";
 
 export default function LoginPage() {
   const { navigate } = usePageTransition();
@@ -19,19 +21,24 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [cursor, setCursor] = useState({ x: 50, y: 50 });
-
-  const handleMouseMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    setCursor({
-      x: ((e.clientX - rect.left) / rect.width) * 100,
-      y: ((e.clientY - rect.top) / rect.height) * 100,
-    });
-  }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
+
+    const supabase = createClient();
+
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+
+    if (error) {
+      alert(error.message); 
+      setLoading(false);
+      return;
+    }
+
     // Small delay so spinner is visible before curtain drops
     await new Promise((r) => setTimeout(r, 350));
     await navigate("/dashboard");
@@ -40,19 +47,8 @@ export default function LoginPage() {
   return (
     <div
       className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden"
-      onMouseMove={handleMouseMove}
-      style={{ "--cx": `${cursor.x}%`, "--cy": `${cursor.y}%` } as React.CSSProperties}
     >
-      {/* Dotted grid background */}
-      <div
-        className="pointer-events-none absolute inset-0"
-        style={{
-          backgroundImage: "radial-gradient(circle, oklch(1 0 0 / 18%) 1px, transparent 1px)",
-          backgroundSize: "28px 28px",
-          maskImage: `radial-gradient(ellipse 55% 55% at var(--cx) var(--cy), black 0%, transparent 100%)`,
-          WebkitMaskImage: `radial-gradient(ellipse 55% 55% at var(--cx) var(--cy), black 0%, transparent 100%)`,
-        }}
-      />
+      <AuthBackgroundCards />
 
       {/* Top-left logo */}
       <header className="absolute left-6 top-6 z-10">
@@ -61,7 +57,7 @@ export default function LoginPage() {
 
       {/* Card */}
       <div className="z-10 flex w-full max-w-sm flex-col px-4">
-        <Card className="w-full gap-0 border-border/60 py-0 shadow-2xl">
+        <Card className="w-full gap-0 border-border/60 py-0 shadow-2xl" style={{ background: 'oklch(0.19 0.008 78)' }}>
           <div className="flex flex-col gap-5 p-8">
             <div className="flex flex-col gap-1">
               <h1 className="text-xl font-semibold tracking-tight text-foreground">
@@ -153,5 +149,3 @@ export default function LoginPage() {
     </div>
   );
 }
-
-
