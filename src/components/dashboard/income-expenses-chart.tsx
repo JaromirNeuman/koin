@@ -1,3 +1,7 @@
+"use client";
+
+import { motion } from "framer-motion";
+
 const MONTHS  = ["Aug", "Sep", "Okt", "Nov", "Dec", "Jan"];
 const INCOME   = [3050, 3300, 3200, 3600, 3900, 3850];
 const EXPENSES = [2100, 2350, 2200, 2700, 2600, 2400];
@@ -82,21 +86,45 @@ export function IncomeExpensesChart() {
       ))}
 
       {/* Area fills */}
-      <path d={incArea} fill="url(#incGrad)" />
-      <path d={expArea} fill="url(#expGrad)" />
+      <motion.path
+        d={incArea} fill="url(#incGrad)"
+        initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+        transition={{ duration: 0.6, delay: 0.7 }}
+      />
+      <motion.path
+        d={expArea} fill="url(#expGrad)"
+        initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+        transition={{ duration: 0.6, delay: 0.8 }}
+      />
 
       {/* Lines */}
-      <path d={incLine} fill="none" stroke="oklch(0.75 0.15 145)" strokeWidth={2}   strokeLinecap="round" strokeLinejoin="round" />
-      <path d={expLine} fill="none" stroke="oklch(0.65 0.18 200)" strokeWidth={2}   strokeLinecap="round" strokeLinejoin="round" />
+      <motion.path
+        d={incLine} fill="none" stroke="oklch(0.75 0.15 145)" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"
+        initial={{ pathLength: 0 }} animate={{ pathLength: 1 }}
+        transition={{ duration: 1.2, ease: [0.16, 1, 0.3, 1] }}
+      />
+      <motion.path
+        d={expLine} fill="none" stroke="oklch(0.65 0.18 200)" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"
+        initial={{ pathLength: 0 }} animate={{ pathLength: 1 }}
+        transition={{ duration: 1.2, delay: 0.12, ease: [0.16, 1, 0.3, 1] }}
+      />
 
       {/* Dots */}
       {incPts.map(([x, y], i) => (
-        <circle key={i} cx={x} cy={y} r={3.5}
-          fill="oklch(0.75 0.15 145)" stroke="oklch(0.16 0.007 78)" strokeWidth={1.5} />
+        <motion.circle key={`inc-${i}`} cx={x} cy={y} r={3.5}
+          fill="oklch(0.75 0.15 145)" stroke="var(--card)" strokeWidth={1.5}
+          initial={{ scale: 0, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+          style={{ transformBox: "fill-box", transformOrigin: "center" }}
+          transition={{ type: "spring", stiffness: 500, damping: 22, delay: 0.6 + i * 0.07 }}
+        />
       ))}
       {expPts.map(([x, y], i) => (
-        <circle key={i} cx={x} cy={y} r={3.5}
-          fill="oklch(0.65 0.18 200)" stroke="oklch(0.16 0.007 78)" strokeWidth={1.5} />
+        <motion.circle key={`exp-${i}`} cx={x} cy={y} r={3.5}
+          fill="oklch(0.65 0.18 200)" stroke="var(--card)" strokeWidth={1.5}
+          initial={{ scale: 0, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+          style={{ transformBox: "fill-box", transformOrigin: "center" }}
+          transition={{ type: "spring", stiffness: 500, damping: 22, delay: 0.7 + i * 0.07 }}
+        />
       ))}
     </svg>
   );

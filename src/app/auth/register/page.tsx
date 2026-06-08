@@ -13,7 +13,6 @@ import {
   TransitionLink,
 } from "@/components/layout/page-transition";
 import { AuthBackgroundCards } from "@/components/layout/auth-bg-cards";
-import { createClient } from "@/lib/supabase/client";
 
 const REQUIREMENTS = [
   { id: "length",    label: "Alespoň 8 znaků",          test: (p: string) => p.length >= 8 },
@@ -67,24 +66,6 @@ export default function RegisterPage() {
     }
     setError(null);
     setLoading(true);
-
-    const supabase = createClient();
-
-    const { data, error: signUpError } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: {
-          full_name: name,
-        },
-      },
-    });
-
-    if (signUpError) {
-      setError(signUpError.message);
-      setLoading(false);
-      return;
-    }
 
     await new Promise((r) => setTimeout(r, 350));
     await navigate("/dashboard");
