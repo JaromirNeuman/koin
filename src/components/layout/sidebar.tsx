@@ -20,12 +20,17 @@ const NAV = [
   { href: "/settings",     label: "Nastavení",    icon: Settings },
 ];
 
-export function Sidebar() {
+export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
   const { navigate } = usePageTransition();
 
+  function go(href: string) {
+    navigate(href);
+    onNavigate?.();
+  }
+
   return (
-    <aside className="sticky top-0 flex h-screen w-60 shrink-0 flex-col border-r border-border/50 bg-card/70 px-3 py-5 backdrop-blur">
+    <aside className="flex h-full w-60 shrink-0 flex-col border-r border-border/50 bg-card/70 px-3 py-5 backdrop-blur">
       {/* Logo */}
       <div className="flex items-center gap-2.5 px-2 pb-8">
         <KoinLogo size={30} />
@@ -42,7 +47,7 @@ export function Sidebar() {
           return (
             <button
               key={href}
-              onClick={() => navigate(href)}
+              onClick={() => go(href)}
               className={cn(
                 "flex h-9 w-full items-center gap-2.5 rounded-lg px-2.5 text-[13px] transition-colors",
                 active

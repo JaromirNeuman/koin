@@ -29,6 +29,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Modal } from "@/components/ui/modal";
 import { CountUp } from "@/components/ui/count-up";
+import { PageHeader } from "@/components/layout/page-header";
+import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
 import { IncomeExpensesChart } from "@/components/dashboard/income-expenses-chart";
 import { CategoryDonut } from "@/components/dashboard/category-donut";
@@ -256,11 +258,16 @@ export default function DashboardPage() {
     localStorage.setItem(COMPACT_KEY, compactLayout ? "1" : "0");
   }, [compactLayout]);
 
+  const { success, toast } = useToast();
   const visible = widgets.filter((w) => w.visible);
   const hidden = widgets.filter((w) => !w.visible);
 
   function handleReorder(next: WidgetState[]) {
     setWidgets([...next, ...hidden]);
+  }
+  function finishEditing() {
+    setEditing(false);
+    success("Rozložení uloženo");
   }
   function setVisible(id: WidgetId, value: boolean) {
     setWidgets((prev) => prev.map((w) => (w.id === id ? { ...w, visible: value } : w)));
@@ -273,24 +280,25 @@ export default function DashboardPage() {
   function resetLayout() {
     setWidgets(DEFAULT_WIDGETS);
     setCompactLayout(false);
+    toast("Rozložení obnoveno");
   }
 
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-6 py-7 lg:px-10">
       {/* Header */}
-      <div className="flex items-start justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground">Přehled</h1>
-          <p className="mt-0.5 flex items-center gap-1.5 text-[13px] text-muted-foreground">
+      <PageHeader
+        title="Přehled"
+        subtitle={
+          <>
             Únor 2026
             <span className="relative flex size-1.5">
               <span className="absolute inline-flex size-full animate-ping rounded-full bg-emerald-400/70" />
               <span className="relative inline-flex size-1.5 rounded-full bg-emerald-400" />
             </span>
             aktualizované před 2 min
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
+          </>
+        }
+        actions={
           <AnimatePresence mode="popLayout" initial={false}>
             {editing ? (
               <motion.div
@@ -305,7 +313,7 @@ export default function DashboardPage() {
                   <RotateCcw className="size-3.5" />
                   Obnovit
                 </Button>
-                <Button variant="default" size="sm" onClick={() => setEditing(false)}>
+                <Button variant="default" size="sm" onClick={finishEditing}>
                   <Check className="size-3.5" />
                   Hotovo
                 </Button>
@@ -330,8 +338,8 @@ export default function DashboardPage() {
               </motion.div>
             )}
           </AnimatePresence>
-        </div>
-      </div>
+        }
+      />
 
       {/* Edit-mode toolbar */}
       <AnimatePresence initial={false}>
@@ -646,8 +654,11 @@ function DashboardDialogs({
   modal: DashboardModal;
   onClose: () => void;
 }) {
+  const { success } = useToast();
+
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    success("Transakce přidána");
     onClose();
   }
 

@@ -21,6 +21,8 @@ import { Label } from "@/components/ui/label";
 import { Modal } from "@/components/ui/modal";
 import { RevealGroup, RevealItem } from "@/components/ui/reveal";
 import { Skeleton } from "@/components/ui/skeleton";
+import { PageHeader } from "@/components/layout/page-header";
+import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
 
 const TRANSACTIONS = [
@@ -82,21 +84,19 @@ export default function TransactionsPage() {
 
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-6 py-7 lg:px-10">
-      <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground">Transakce</h1>
-          <p className="mt-1 text-[13px] text-muted-foreground">
-            Únor 2026 · aktualizované před 2 min
-          </p>
-        </div>
-        <Button
-          className="h-9 gap-2 bg-primary px-3 text-primary-foreground"
-          onClick={() => setModal({ type: "transaction" })}
-        >
-          <Plus className="size-4" />
-          Přidat transakci
-        </Button>
-      </header>
+      <PageHeader
+        title="Transakce"
+        subtitle="Únor 2026 · aktualizované před 2 min"
+        actions={
+          <Button
+            className="h-9 gap-2 bg-primary px-3 text-primary-foreground"
+            onClick={() => setModal({ type: "transaction" })}
+          >
+            <Plus className="size-4" />
+            Přidat transakci
+          </Button>
+        }
+      />
 
       {loading ? (
         <TransactionsSkeleton />
@@ -295,6 +295,7 @@ function TransactionDialogs({
   modal: ModalState;
   onClose: () => void;
 }) {
+  const { success } = useToast();
   const isTransaction = modal?.type === "transaction";
   const isCategory = modal?.type === "category";
   const isDeleteCategory = modal?.type === "delete-category";
@@ -302,6 +303,20 @@ function TransactionDialogs({
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    if (modal?.type === "transaction") {
+      success(modal.transaction ? "Transakce upravena" : "Transakce přidána");
+    } else if (modal?.type === "category") {
+      success(modal.category ? "Kategorie upravena" : "Kategorie přidána");
+    } else if (modal?.type === "recurring") {
+      success(modal.item ? "Trvalý příkaz upraven" : "Trvalý příkaz přidán");
+    }
+    onClose();
+  }
+
+  function handleDeleteCategory() {
+    if (modal?.type === "delete-category") {
+      success("Kategorie smazána", `„${modal.category}" byla odebrána.`);
+    }
     onClose();
   }
 
@@ -380,7 +395,7 @@ function TransactionDialogs({
       >
         <div className="flex justify-end gap-2">
           <Button type="button" variant="outline" onClick={onClose}>Zrušit</Button>
-          <Button type="button" variant="destructive" onClick={onClose}>Smazat</Button>
+          <Button type="button" variant="destructive" onClick={handleDeleteCategory}>Smazat</Button>
         </div>
       </Modal>
 

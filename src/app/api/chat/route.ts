@@ -15,9 +15,12 @@ Aktuální data uživatele (únor 2026):
 - Největší kategorie: bydlení/nájem €750, jídlo, doprava, zábava
 - Riziko: nepravidelné výdaje za auto
 
-Když navrhuješ částky, používej formát s eurem (např. €120). Drž odpovědi do ~4 vět, pokud uživatel nežádá detail.`;
+Když navrhuješ částky, používej formát s eurem (např. €120). Drž odpovědi stručné.
 
-const MODEL = process.env.OPENAI_MODEL ?? "gpt-4o-mini";
+Formátování (Markdown): pro výčty používej odrážky "- " nebo číslovaný seznam "1. " (každá položka na vlastním řádku, ne v jednom odstavci). Klíčové pojmy a částky zvýrazni **tučně**. Bez nadpisů a tabulek.`;
+
+const MODEL =
+  process.env.OPENAI_MODEL ?? process.env.OPENAI_ESTIMATOR_MODEL ?? "gpt-4o-mini";
 
 export async function POST(req: NextRequest) {
   const apiKey = process.env.OPENAI_API_KEY;

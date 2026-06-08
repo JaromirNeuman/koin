@@ -18,6 +18,7 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { RevealGroup, RevealItem } from "@/components/ui/reveal";
 import { Skeleton } from "@/components/ui/skeleton";
+import { PageHeader } from "@/components/layout/page-header";
 import { cn } from "@/lib/utils";
 
 type Message = {
@@ -25,25 +26,102 @@ type Message = {
   content: string;
 };
 
-// Renders assistant text word-by-word; only newly-arrived words fade in.
-function AssistantText({ text }: { text: string }) {
-  const words = text.split(" ");
+// ─── Minimal markdown rendering (bold / italic / code / lists) ───────────────────
+function renderInline(text: string, keyPrefix: string): React.ReactNode[] {
+  const nodes: React.ReactNode[] = [];
+  const regex = /(\*\*([^*]+)\*\*|`([^`]+)`|\*([^*]+)\*|_([^_]+)_)/g;
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+  let key = 0;
+
+  while ((match = regex.exec(text)) !== null) {
+    if (match.index > lastIndex) nodes.push(text.slice(lastIndex, match.index));
+    if (match[2] !== undefined) {
+      nodes.push(<strong key={`${keyPrefix}-${key++}`} className="font-semibold text-foreground">{match[2]}</strong>);
+    } else if (match[3] !== undefined) {
+      nodes.push(
+        <code key={`${keyPrefix}-${key++}`} className="rounded bg-background/60 px-1 py-0.5 text-[12px] font-mono text-foreground">
+          {match[3]}
+        </code>
+      );
+    } else if (match[4] !== undefined || match[5] !== undefined) {
+      nodes.push(<em key={`${keyPrefix}-${key++}`}>{match[4] ?? match[5]}</em>);
+    }
+    lastIndex = regex.lastIndex;
+  }
+  if (lastIndex < text.length) nodes.push(text.slice(lastIndex));
+  return nodes;
+}
+
+type Block =
+  | { type: "p"; text: string }
+  | { type: "ul"; items: string[] }
+  | { type: "ol"; items: string[] };
+
+function parseBlocks(content: string): Block[] {
+  const lines = content.split("\n");
+  const blocks: Block[] = [];
+
+  for (const raw of lines) {
+    const line = raw.trimEnd();
+    if (!line.trim()) continue;
+
+    const bullet = line.match(/^\s*[-*•]\s+(.*)$/);
+    const ordered = line.match(/^\s*\d+[.)]\s+(.*)$/);
+    const last = blocks[blocks.length - 1];
+
+    if (bullet) {
+      if (last?.type === "ul") last.items.push(bullet[1]);
+      else blocks.push({ type: "ul", items: [bullet[1]] });
+    } else if (ordered) {
+      if (last?.type === "ol") last.items.push(ordered[1]);
+      else blocks.push({ type: "ol", items: [ordered[1]] });
+    } else {
+      blocks.push({ type: "p", text: line.trim() });
+    }
+  }
+  return blocks;
+}
+
+function Markdown({ content }: { content: string }) {
+  const blocks = parseBlocks(content);
   return (
-    <>
-      {words.map((word, i) => (
-        <motion.span
-          key={i}
-          initial={{ opacity: 0, filter: "blur(5px)" }}
-          animate={{ opacity: 1, filter: "blur(0px)" }}
-          transition={{ duration: 0.35, ease: "easeOut" }}
-          className="inline"
-        >
-          {word}
-          {i < words.length - 1 ? " " : ""}
-        </motion.span>
-      ))}
-    </>
+    <div className="space-y-2">
+      {blocks.map((block, i) => {
+        if (block.type === "ul") {
+          return (
+            <ul key={i} className="list-disc space-y-1 pl-4 marker:text-muted-foreground">
+              {block.items.map((item, j) => (
+                <li key={j}>{renderInline(item, `${i}-${j}`)}</li>
+              ))}
+            </ul>
+          );
+        }
+        if (block.type === "ol") {
+          return (
+            <ol key={i} className="list-decimal space-y-1 pl-4 marker:text-muted-foreground">
+              {block.items.map((item, j) => (
+                <li key={j}>{renderInline(item, `${i}-${j}`)}</li>
+              ))}
+            </ol>
+          );
+        }
+        return <p key={i}>{renderInline(block.text, `${i}`)}</p>;
+      })}
+    </div>
   );
+}
+
+// ─── Contextual follow-up suggestions ───────────────────────────────────────────
+function suggestFollowUps(text: string): string[] {
+  const t = text.toLowerCase();
+  if (t.includes("limit"))
+    return ["Nastav konkrétní limity", "Kolik ušetřím za 3 měsíce?", "Co když limit překročím?"];
+  if (t.includes("rozpoč"))
+    return ["Uprav rozpočet na úspory 50 %", "Přidej rezervu na auto", "Kde nejvíc utrácím?"];
+  if (t.includes("zůstat") || t.includes("předpov") || t.includes("březn"))
+    return ["Jak zrychlit růst zůstatku?", "Naplánuj rozpočet", "Kde ušetřím?"];
+  return ["Kde ušetřím?", "Naplánuj rozpočet", "Předpověď zůstatku"];
 }
 
 const STARTER_MESSAGES: Message[] = [
@@ -90,6 +168,7 @@ export default function AiPage() {
   const timers = useRef<number[]>([]);
 
   const busy = thinking || streaming;
+  const lastMessage = messages[messages.length - 1];
 
   useEffect(() => {
     const timeout = window.setTimeout(() => setLoading(false), 550);
@@ -198,41 +277,39 @@ export default function AiPage() {
   }
 
   return (
-    <div className="mx-auto flex h-screen w-full max-w-7xl flex-col gap-6 px-6 py-7 lg:px-10">
-      <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground">AI Přehled</h1>
-          <p className="mt-1 text-[13px] text-muted-foreground">
-            Osobní finanční asistent nad vašimi transakcemi
-          </p>
-        </div>
-        <div
-          className={cn(
-            "flex items-center gap-2 rounded-full border px-3 py-1.5 text-[12px] font-medium transition-colors",
-            busy
-              ? "border-indigo-400/20 bg-indigo-500/10 text-indigo-300"
-              : "border-emerald-400/20 bg-emerald-500/10 text-emerald-300"
-          )}
-        >
-          <span className="relative flex size-1.5">
-            <motion.span
-              className={cn(
-                "absolute inline-flex size-full rounded-full",
-                busy ? "bg-indigo-300" : "bg-emerald-300"
-              )}
-              animate={{ opacity: [0.4, 1, 0.4], scale: busy ? [1, 1.6, 1] : 1 }}
-              transition={{ duration: 1.2, repeat: Infinity }}
-            />
-            <span
-              className={cn(
-                "relative inline-flex size-1.5 rounded-full",
-                busy ? "bg-indigo-300" : "bg-emerald-300"
-              )}
-            />
-          </span>
-          {busy ? "Píše…" : "Připraveno"}
-        </div>
-      </header>
+    <div className="mx-auto flex h-full w-full max-w-7xl flex-col gap-6 px-6 py-7 lg:px-10">
+      <PageHeader
+        title="AI Přehled"
+        subtitle="Osobní finanční asistent nad vašimi transakcemi"
+        actions={
+          <div
+            className={cn(
+              "flex items-center gap-2 rounded-full border px-3 py-1.5 text-[12px] font-medium transition-colors",
+              busy
+                ? "border-indigo-400/20 bg-indigo-500/10 text-indigo-300"
+                : "border-emerald-400/20 bg-emerald-500/10 text-emerald-300"
+            )}
+          >
+            <span className="relative flex size-1.5">
+              <motion.span
+                className={cn(
+                  "absolute inline-flex size-full rounded-full",
+                  busy ? "bg-indigo-300" : "bg-emerald-300"
+                )}
+                animate={{ opacity: [0.4, 1, 0.4], scale: busy ? [1, 1.6, 1] : 1 }}
+                transition={{ duration: 1.2, repeat: Infinity }}
+              />
+              <span
+                className={cn(
+                  "relative inline-flex size-1.5 rounded-full",
+                  busy ? "bg-indigo-300" : "bg-emerald-300"
+                )}
+              />
+            </span>
+            {busy ? "Píše…" : "Připraveno"}
+          </div>
+        }
+      />
 
       {loading ? (
         <div className="grid min-h-0 flex-1 gap-5 xl:grid-cols-[1fr_340px]">
@@ -276,8 +353,6 @@ export default function AiPage() {
               {messages.map((message, index) => {
                 const assistant = message.role === "assistant";
                 const Icon = assistant ? Bot : User;
-                const isLast = index === messages.length - 1;
-                const showCaret = assistant && isLast && streaming;
 
                 return (
                   <motion.div
@@ -301,15 +376,7 @@ export default function AiPage() {
                           : "rounded-tr-sm bg-primary text-primary-foreground"
                       )}
                     >
-                      {assistant ? <AssistantText text={message.content} /> : message.content}
-                      {showCaret && (
-                        <motion.span
-                          aria-hidden
-                          className="ml-0.5 inline-block h-3.5 w-px translate-y-0.5 bg-current align-middle"
-                          animate={{ opacity: [1, 0] }}
-                          transition={{ duration: 0.7, repeat: Infinity }}
-                        />
-                      )}
+                      {assistant ? <Markdown content={message.content} /> : message.content}
                     </div>
                     {!assistant && (
                       <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-indigo-500 text-white">
@@ -335,6 +402,35 @@ export default function AiPage() {
                     <div className="flex items-center rounded-2xl rounded-tl-sm border border-border/70 bg-secondary/40 px-4 py-3">
                       <span className="text-shimmer text-[13px] font-medium">přemýšlí…</span>
                     </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              {/* Follow-up suggestions after the latest assistant reply */}
+              <AnimatePresence>
+                {!busy && messages.length > 1 && lastMessage?.role === "assistant" && (
+                  <motion.div
+                    key="followups"
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: 6 }}
+                    transition={{ duration: 0.25 }}
+                    className="flex flex-wrap gap-2 pl-11"
+                  >
+                    {suggestFollowUps(lastMessage.content).map((s, i) => (
+                      <motion.button
+                        key={s}
+                        onClick={() => sendMessage(s)}
+                        initial={{ opacity: 0, scale: 0.92 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        transition={{ delay: i * 0.06 }}
+                        whileTap={{ scale: 0.94 }}
+                        className="inline-flex items-center gap-1.5 rounded-full border border-primary/25 bg-primary/5 px-3 py-1.5 text-[12px] text-foreground/80 transition-colors hover:border-primary/40 hover:bg-primary/10 hover:text-foreground"
+                      >
+                        <Sparkles className="size-3 text-primary" />
+                        {s}
+                      </motion.button>
+                    ))}
                   </motion.div>
                 )}
               </AnimatePresence>

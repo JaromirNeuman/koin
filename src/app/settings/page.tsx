@@ -9,6 +9,8 @@ import { Label } from "@/components/ui/label";
 import { Modal } from "@/components/ui/modal";
 import { RevealGroup, RevealItem } from "@/components/ui/reveal";
 import { Skeleton } from "@/components/ui/skeleton";
+import { PageHeader } from "@/components/layout/page-header";
+import { useToast } from "@/components/ui/toast";
 
 type SettingsModal = "save-profile" | "import" | "export-csv" | "annual-report" | null;
 
@@ -27,12 +29,7 @@ export default function SettingsPage() {
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-6 py-7 lg:px-10">
-      <header>
-        <h1 className="text-2xl font-semibold tracking-tight text-foreground">Nastavení</h1>
-        <p className="mt-1 text-[13px] text-muted-foreground">
-          Únor 2026 · aktualizované před 2 min
-        </p>
-      </header>
+      <PageHeader title="Nastavení" subtitle="Únor 2026 · aktualizované před 2 min" />
 
       {loading ? (
         <div className="grid gap-5 lg:grid-cols-2">
@@ -116,8 +113,21 @@ function SettingsDialogs({
   modal: SettingsModal;
   onClose: () => void;
 }) {
+  const { success } = useToast();
+
+  const MESSAGES: Record<NonNullable<SettingsModal>, { title: string; description: string }> = {
+    "save-profile": { title: "Profil uložen", description: "Změny preferencí byly uloženy." },
+    import: { title: "Import spuštěn", description: "Soubor banky se zpracovává." },
+    "export-csv": { title: "Export připraven", description: "CSV se generuje ke stažení." },
+    "annual-report": { title: "Report se vytváří", description: "Po dokončení dorazí na e-mail." },
+  };
+
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    if (modal) {
+      const msg = MESSAGES[modal];
+      success(msg.title, msg.description);
+    }
     onClose();
   }
 
