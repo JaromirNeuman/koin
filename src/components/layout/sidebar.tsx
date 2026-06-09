@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
@@ -11,6 +12,8 @@ import {
 import { KoinLogo } from "@/components/koin-logo";
 import { usePageTransition } from "@/components/layout/page-transition";
 import { cn } from "@/lib/utils";
+import { createClient } from "@/lib/supabase/client";
+import { Profile } from "@/types";
 
 const NAV = [
   { href: "/dashboard",    label: "Dashboard",   icon: LayoutDashboard },
@@ -23,11 +26,57 @@ const NAV = [
 export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
   const { navigate } = usePageTransition();
+  const supabase = createClient();
+
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function loadUserData() {
+      const { data: { user } } = await supabase.auth.getUser();
+
+      if (user) {
+        const { data, error } = await supabase
+          .from("users")
+          .select("*")
+          .eq("id", user.id)
+          .single();
+
+        if (!error && data) {
+          setProfile({
+            id: data.id,
+            email: user.email || "",
+            full_name: data.full_name,
+            avatar_url: data.avatar_url || null,
+            currency: data.currency || "CZK",
+            created_at: data.created_at,
+          });
+        }
+      }
+      setLoading(false);
+    }
+
+    loadUserData();
+  }, [supabase]);
+
+  async function handleLogout() {
+    await supabase.auth.signOut();
+    navigate("/auth/login");
+  }
 
   function go(href: string) {
     navigate(href);
     onNavigate?.();
   }
+
+  const initials = profile?.full_name
+    ? profile.full_name
+        .split(" ")
+        .map((n) => n[0])
+        .join("")
+        .toUpperCase()
+        .substring(0, 2)
+    : "??";
 
   return (
     <aside className="flex h-full w-60 shrink-0 flex-col border-r border-border/50 bg-card/70 px-3 py-5 backdrop-blur">
@@ -70,11 +119,11 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
       {/* User */}
       <div className="flex items-center gap-2.5 border-t border-border/50 px-2 pt-4">
         <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-indigo-500 text-[11px] font-bold text-white">
-          SK
+          {initials}
         </div>
         <div className="flex min-w-0 flex-1 flex-col leading-none">
-          <span className="truncate text-[13px] font-medium text-foreground">Šimon Krimon</span>
-          <button className="mt-1 text-left text-[11px] text-destructive/70 hover:text-destructive">
+          <span className="truncate text-[13px] font-medium text-foreground">{profile?.full_name || "Uživatel"}</span>
+          <button onClick={handleLogout} className="mt-1 text-left text-[11px] text-destructive/70 hover:text-destructive">
             Odhlásit
           </button>
         </div>

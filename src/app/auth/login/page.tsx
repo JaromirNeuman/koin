@@ -13,6 +13,7 @@ import {
   TransitionLink,
 } from "@/components/layout/page-transition";
 import { AuthBackgroundCards } from "@/components/layout/auth-bg-cards";
+import { createClient } from "@/lib/supabase/client"
 
 export default function LoginPage() {
   const { navigate } = usePageTransition();
@@ -24,6 +25,19 @@ export default function LoginPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
+
+    const supabase = createClient();
+
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+
+    if (error) {
+      alert(error.message);
+      setLoading(false);
+      return;
+    }
 
     // Small delay so spinner is visible before curtain drops
     await new Promise((r) => setTimeout(r, 350));

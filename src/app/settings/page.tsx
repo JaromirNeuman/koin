@@ -11,20 +11,79 @@ import { RevealGroup, RevealItem } from "@/components/ui/reveal";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PageHeader } from "@/components/layout/page-header";
 import { useToast } from "@/components/ui/toast";
+import { createClient } from "@/lib/supabase/client";
 
 type SettingsModal = "save-profile" | "import" | "export-csv" | "annual-report" | null;
 
 export default function SettingsPage() {
+  const supabase = createClient();
+  const { success, error: errorToast } = useToast();
+
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [modal, setModal] = useState<SettingsModal>(null);
 
+  const [userId, setUserId] = useState<string | null>(null);
+  const [fullName, setFullName] = useState("");
+  const [currency, setCurrency] = useState("CZK");
+
   useEffect(() => {
-    const timeout = window.setTimeout(() => setLoading(false), 550);
-    return () => window.clearTimeout(timeout);
-  }, []);
+    async function loadUserProfile() {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        
+        if (!user) return;
+        setUserId(user.id);
+
+        const { data, error } = await supabase
+          .from("users")
+          .select("full_name, currency")
+          .eq("id", user.id)
+          .single();
+
+        if (error) throw error;
+
+        if (data) {
+          setFullName(data.full_name || "");
+          setCurrency(data.currency || "CZK");
+        }
+      } catch (err) {
+        console.error("Chyba při načítání profilu:", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    loadUserProfile();
+  }, [supabase]);
 
   function closeModal() {
     setModal(null);
+  }
+
+  async function handleSaveProfile() {
+    if (!userId) return;
+    setSaving(true);
+
+    try {
+      const { error } = await supabase
+        .from("users")
+        .update({
+          full_name: fullName,
+          currency: currency,
+        })
+        .eq("id", userId);
+
+      if (error) throw error;
+
+      success("Profil uložen", "Změny preferencí byly úspěšně uloženy.");
+      closeModal();
+    } catch (err: any) {
+      console.error("Chyba při ukládání:", err);
+      errorToast("Chyba při ukládání", err.message || "Nepodařilo se uložit data.");
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -50,13 +109,13 @@ export default function SettingsPage() {
               <Label htmlFor="name" className="text-[12px] text-muted-foreground">
                 Jméno
               </Label>
-              <Input id="name" defaultValue="Šimon Krimon" className="h-10" />
+              <Input id="name" value={fullName} onChange={(e) => setFullName(e.target.value)} className="h-10" placeholder="Vaše jméno" />
             </div>
             <div className="grid gap-2">
               <Label htmlFor="currency" className="text-[12px] text-muted-foreground">
                 Hlavní měna
               </Label>
-              <Input id="currency" defaultValue="EUR (€)" className="h-10" />
+              <Input id="currency" value={currency} onChange={(e) => setCurrency(e.target.value)} className="h-10" placeholder="Např. CZK, EUR" />
             </div>
           </div>
 
@@ -101,7 +160,12 @@ export default function SettingsPage() {
       </RevealGroup>
       )}
 
-      <SettingsDialogs modal={modal} onClose={closeModal} />
+      <SettingsDialogs 
+        modal={modal} 
+        onClose={closeModal} 
+        onConfirmSave={handleSaveProfile}
+        saving={saving} 
+      />
     </div>
   );
 }
@@ -109,9 +173,13 @@ export default function SettingsPage() {
 function SettingsDialogs({
   modal,
   onClose,
+  onConfirmSave,
+  saving,
 }: {
   modal: SettingsModal;
   onClose: () => void;
+  onConfirmSave: () => Promise<void>;
+  saving: boolean;
 }) {
   const { success } = useToast();
 
@@ -124,7 +192,7 @@ function SettingsDialogs({
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    if (modal) {
+    if (modal && modal !== "save-profile") {
       const msg = MESSAGES[modal];
       success(msg.title, msg.description);
     }
@@ -139,15 +207,15 @@ function SettingsDialogs({
         description="Potvrzení pro budoucí update profilu v Supabase."
         onClose={onClose}
       >
-        <form className="grid gap-4" onSubmit={handleSubmit}>
+        <div className="grid gap-4">
           <div className="rounded-lg border border-border/70 bg-secondary/30 px-3 py-3 text-[13px] text-muted-foreground">
             Změny budou uloženy do profilu uživatele a použity jako výchozí preference aplikace.
           </div>
           <div className="flex justify-end gap-2">
-            <Button type="button" variant="outline" onClick={onClose}>Zrušit</Button>
-            <Button type="submit">Potvrdit</Button>
+            <Button type="button" variant="outline" onClick={onClose} disabled={saving}>Zrušit</Button>
+            <Button type="button" onClick={onConfirmSave} disabled={saving}>Potvrdit</Button>
           </div>
-        </form>
+        </div>
       </Modal>
 
       <Modal
