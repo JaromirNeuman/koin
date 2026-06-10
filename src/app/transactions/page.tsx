@@ -24,6 +24,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { PageHeader } from "@/components/layout/page-header";
 import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
+import { createClient } from "@/lib/supabase/client";
 
 const TRANSACTIONS = [
   { date: "3. 2. 2026", name: "Lidl", category: "Jídlo", amount: -28.5 },
@@ -34,19 +35,23 @@ const TRANSACTIONS = [
   { date: "28. 1. 2026", name: "Knihy Dobrovský", category: "Vzdělávání", amount: -34.9 },
 ];
 
-const CATEGORIES = ["Jídlo", "Bydlení", "Doprava", "Zábava", "Vzdělávání"];
 const RECURRING = [
   { name: "Nájem", amount: 750, interval: "Měsíčně", category: "Bydlení" },
   { name: "Netflix", amount: 12.99, interval: "Měsíčně", category: "Zábava" },
   { name: "Spotify", amount: 6.99, interval: "Měsíčně", category: "Zábava" },
 ];
 
+type DbCategory = {
+  id: string | number;
+  name: string;
+};
+
 type Transaction = (typeof TRANSACTIONS)[number];
 type Recurring = (typeof RECURRING)[number];
 type ModalState =
   | { type: "transaction"; transaction?: Transaction }
-  | { type: "category"; category?: string }
-  | { type: "delete-category"; category: string }
+  | { type: "category"; category?: DbCategory }
+  | { type: "delete-category"; category: DbCategory }
   | { type: "recurring"; item?: Recurring }
   | null;
 
@@ -58,14 +63,62 @@ function formatAmount(amount: number) {
 }
 
 export default function TransactionsPage() {
+  const supabase = createClient();
+  const { success, error: errorToast } = useToast();
+
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
   const [modal, setModal] = useState<ModalState>(null);
 
+  const [categories, setCategories] = useState<DbCategory[]>([]);
+  const [newCategoryName, setNewCategoryName] = useState("");
+  const [actionLoading, setActionLoading] = useState(false);
+
+  async function fetchCategories() {
+    try {
+      const { data, error } = await supabase
+        .from("categories")
+        .select("id, name")
+        .order("name", { ascending: true });
+
+      if (error) throw error;
+      if (data) setCategories(data);
+    } catch (err: any) {
+      console.error("Chyba při načítání kategorií:", err);
+    }
+  }
+
   useEffect(() => {
-    const timeout = window.setTimeout(() => setLoading(false), 550);
-    return () => window.clearTimeout(timeout);
+    async function initPage() {
+      await fetchCategories();
+      setLoading(false);
+    }
+    initPage();
   }, []);
+
+  async function handleInlineAddCategory() {
+    if (!newCategoryName.trim()) return;
+    setActionLoading(true);
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Uživatel není přihlášen.");
+
+      const { error } = await supabase
+        .from("categories")
+        .insert({ name: newCategoryName.trim(), user_id: user.id });
+
+      if (error) throw error;
+
+      success("Kategorie přidána", `Kategorie „${newCategoryName}“ byla úspěšně vytvořena.`);
+      setNewCategoryName("");
+      await fetchCategories();
+    } catch (err: any) {
+      errorToast("Chyba při ukládání", err.message || "Nepodařilo se přidat kategorii.");
+    } finally {
+      setActionLoading(false);
+    }
+  }
 
   const filteredTransactions = useMemo(() => {
     const normalized = query.trim().toLowerCase();
@@ -195,24 +248,39 @@ export default function TransactionsPage() {
             <h2 className="text-[15px] font-semibold text-foreground">Správa kategorií</h2>
           </div>
           <div className="flex flex-wrap gap-2">
-            {CATEGORIES.map((category) => (
+            {categories.map((category) => (
               <span
-                key={category}
+                key={category.id}
                 className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-secondary/60 px-3 py-1.5 text-[12px]"
               >
-                <button onClick={() => setModal({ type: "category", category })}>{category}</button>
-                <button onClick={() => setModal({ type: "delete-category", category })} aria-label={`Smazat ${category}`}>
+                <button onClick={() => setModal({ type: "category", category })}>{category.name}</button>
+                <button onClick={() => setModal({ type: "delete-category", category })} aria-label={`Smazat ${category.name}`}>
                   <X className="size-3.5 text-red-400" />
                 </button>
               </span>
             ))}
+            {categories.length === 0 && (
+                    <p className="text-[12px] text-muted-foreground py-1">Žádné kategorie nenalezeny. Vytvoř si první.</p>
+            )}
           </div>
           <div className="flex gap-2">
-            <Input className="h-10" placeholder="Nová kategorie..." />
-            <Button className="h-10 w-12" aria-label="Přidat kategorii" onClick={() => setModal({ type: "category" })}>
-              <Plus className="size-4" />
-            </Button>
-          </div>
+                  <Input 
+                    className="h-10" 
+                    placeholder="Nová kategorie..." 
+                    value={newCategoryName}
+                    onChange={(e) => setNewCategoryName(e.target.value)}
+                    disabled={actionLoading}
+                    onKeyDown={(e) => e.key === "Enter" && handleInlineAddCategory()}
+                  />
+                  <Button 
+                    className="h-10 w-12" 
+                    aria-label="Přidat kategorii" 
+                    onClick={handleInlineAddCategory}
+                    disabled={actionLoading || !newCategoryName.trim()}
+                  >
+                    <Plus className="size-4" />
+                  </Button>
+           </div>
         </Card>
         </RevealItem>
 
@@ -255,7 +323,7 @@ export default function TransactionsPage() {
         </RevealGroup>
       )}
 
-      <TransactionDialogs modal={modal} onClose={closeModal} />
+      <TransactionDialogs modal={modal} onClose={closeModal} onRefreshCategories={fetchCategories} categories={categories} />
     </div>
   );
 }
@@ -291,33 +359,97 @@ function TransactionsSkeleton() {
 function TransactionDialogs({
   modal,
   onClose,
+  onRefreshCategories,
+  categories,
 }: {
   modal: ModalState;
   onClose: () => void;
+  onRefreshCategories: () => Promise<void>;
+  categories: DbCategory[];
 }) {
-  const { success } = useToast();
+  const supabase = createClient();
+  const { success, error: errorToast } = useToast();
+
   const isTransaction = modal?.type === "transaction";
   const isCategory = modal?.type === "category";
   const isDeleteCategory = modal?.type === "delete-category";
   const isRecurring = modal?.type === "recurring";
 
-  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    if (modal?.type === "transaction") {
-      success(modal.transaction ? "Transakce upravena" : "Transakce přidána");
-    } else if (modal?.type === "category") {
-      success(modal.category ? "Kategorie upravena" : "Kategorie přidána");
-    } else if (modal?.type === "recurring") {
-      success(modal.item ? "Trvalý příkaz upraven" : "Trvalý příkaz přidán");
+  const [editCategoryName, setEditCategoryName] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (modal?.type === "category" && modal.category) {
+      setEditCategoryName(modal.category.name);
+    } else {
+      setEditCategoryName("");
     }
-    onClose();
+  }, [modal]);
+
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setSubmitting(true);
+
+    try {
+      if (modal?.type === "category") {
+        if (modal.category) {
+          const { error } = await supabase
+            .from("categories")
+            .update({ name: editCategoryName.trim() })
+            .eq("id", modal.category.id);
+
+          if (error) throw error;
+          success("Kategorie upravena", "Změna byla úspěšně uložena.");
+        } else {
+          const { data: { user } } = await supabase.auth.getUser();
+          if (!user) throw new Error("Uživatel není přihlášen.");
+
+          const { error } = await supabase
+            .from("categories")
+            .insert({ name: editCategoryName.trim(), user_id: user.id });
+
+          if (error) throw error;
+          success("Kategorie přidána", "Nová kategorie byla uložena.");
+        }
+        
+        await onRefreshCategories();
+        onClose();
+      }
+      
+      if (modal?.type === "transaction") {
+        success(modal.transaction ? "Transakce upravena" : "Transakce přidána");
+        onClose();
+      } else if (modal?.type === "recurring") {
+        success(modal.item ? "Trvalý příkaz upraven" : "Trvalý příkaz přidán");
+        onClose();
+      }
+    } catch (err: any) {
+      errorToast("Chyba při ukládání", err.message || "Operace se nezdařila.");
+    } finally {
+      setSubmitting(false);
+    }
   }
 
-  function handleDeleteCategory() {
-    if (modal?.type === "delete-category") {
-      success("Kategorie smazána", `„${modal.category}" byla odebrána.`);
+  async function handleDeleteCategory() {
+    if (modal?.type !== "delete-category") return;
+    setSubmitting(true);
+
+    try {
+      const { error } = await supabase
+        .from("categories")
+        .delete()
+        .eq("id", modal.category.id);
+
+      if (error) throw error;
+
+      success("Kategorie smazána", `„${modal.category.name}“ byla úspěšně odebrána.`);
+      await onRefreshCategories();
+      onClose();
+    } catch (err: any) {
+      errorToast("Chyba při mazání", err.message || "Nepodařilo se smazat kategorii.");
+    } finally {
+      setSubmitting(false);
     }
-    onClose();
   }
 
   return (
@@ -357,8 +489,8 @@ function TransactionDialogs({
               defaultValue={isTransaction ? modal.transaction?.category : "Jídlo"}
               className="h-10 rounded-lg border border-input bg-input/30 px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
             >
-              {CATEGORIES.map((category) => (
-                <option key={category}>{category}</option>
+              {categories.map((cat) => (
+                <option key={cat.id} value={cat.name}>{cat.name}</option>
               ))}
             </select>
           </div>
@@ -378,7 +510,13 @@ function TransactionDialogs({
         <form className="grid gap-4" onSubmit={handleSubmit}>
           <div className="grid gap-2">
             <Label htmlFor="category-name">Název kategorie</Label>
-            <Input id="category-name" name="name" defaultValue={isCategory ? modal.category : ""} />
+            <Input 
+              id="category-name" 
+              value={editCategoryName} 
+              onChange={(e) => setEditCategoryName(e.target.value)} 
+              disabled={submitting}
+              placeholder="Např. Nákupy, Cestování..."
+            />
           </div>
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="outline" onClick={onClose}>Zrušit</Button>
@@ -395,7 +533,9 @@ function TransactionDialogs({
       >
         <div className="flex justify-end gap-2">
           <Button type="button" variant="outline" onClick={onClose}>Zrušit</Button>
-          <Button type="button" variant="destructive" onClick={handleDeleteCategory}>Smazat</Button>
+          <Button type="button" variant="destructive" onClick={handleDeleteCategory} disabled={submitting}>
+            {submitting ? "Mažu..." : "Smazat"}
+          </Button>
         </div>
       </Modal>
 
@@ -428,8 +568,8 @@ function TransactionDialogs({
               defaultValue={isRecurring ? modal.item?.category : "Bydlení"}
               className="h-10 rounded-lg border border-input bg-input/30 px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
             >
-              {CATEGORIES.map((category) => (
-                <option key={category}>{category}</option>
+              {categories.map((cat) => (
+                <option key={cat.id} value={cat.name}>{cat.name}</option>
               ))}
             </select>
           </div>
