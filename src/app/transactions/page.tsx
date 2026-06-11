@@ -26,30 +26,32 @@ import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 
-const TRANSACTIONS = [
-  { date: "3. 2. 2026", name: "Lidl", category: "Jídlo", amount: -28.5 },
-  { date: "2. 2. 2026", name: "Výplata", category: "Příjem", amount: 3800 },
-  { date: "1. 2. 2026", name: "Netflix", category: "Zábava", amount: -12.99 },
-  { date: "31. 1. 2026", name: "České dráhy", category: "Doprava", amount: -18.2 },
-  { date: "29. 1. 2026", name: "Freelance projekt", category: "Příjem", amount: 540 },
-  { date: "28. 1. 2026", name: "Knihy Dobrovský", category: "Vzdělávání", amount: -34.9 },
-];
-
 const RECURRING = [
   { name: "Nájem", amount: 750, interval: "Měsíčně", category: "Bydlení" },
   { name: "Netflix", amount: 12.99, interval: "Měsíčně", category: "Zábava" },
   { name: "Spotify", amount: 6.99, interval: "Měsíčně", category: "Zábava" },
 ];
 
+type DbTransaction = {
+  id: number;
+  name: string;
+  amount: number;
+  date: string;
+  currency: string;
+  user_id: string;
+  transaction_type: string; // 'income' | 'expense'
+  category_id: number | null;
+  categories?: { name: string } | null;
+};
+
 type DbCategory = {
   id: string | number;
   name: string;
 };
 
-type Transaction = (typeof TRANSACTIONS)[number];
 type Recurring = (typeof RECURRING)[number];
 type ModalState =
-  | { type: "transaction"; transaction?: Transaction }
+  | { type: "transaction"; transaction?: DbTransaction }
   | { type: "category"; category?: DbCategory }
   | { type: "delete-category"; category: DbCategory }
   | { type: "recurring"; item?: Recurring }
@@ -74,6 +76,11 @@ export default function TransactionsPage() {
   const [newCategoryName, setNewCategoryName] = useState("");
   const [actionLoading, setActionLoading] = useState(false);
 
+  const [transactions, setTransactions] = useState<DbTransaction[]>([]);
+
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 5; // Počet zobrazených položek na jedné stránce
+
   async function fetchCategories() {
     try {
       const { data, error } = await supabase
@@ -88,13 +95,42 @@ export default function TransactionsPage() {
     }
   }
 
-  useEffect(() => {
-    async function initPage() {
-      await fetchCategories();
-      setLoading(false);
+  async function fetchTransactions() {
+    try {
+      const { data, error } = await supabase
+        .from("transactions")
+        .select(`
+          id,
+          name,
+          amount,
+          date,
+          currency,
+          user_id,
+          transaction_type,
+          category_id,
+          categories ( name )
+        `)
+        .order("date", { ascending: false });
+
+      if (error) throw error;
+      if (data) setTransactions(data as unknown as DbTransaction[]);
+    } catch (err: any) {
+      console.error("Chyba při načítání transakcí:", err);
+      errorToast("Chyba stahování", "Nepodařilo se načíst transakce.");
     }
-    initPage();
-  }, []);
+  }
+
+  useEffect(() => {
+  async function initPage() {
+    const { data: { session } } = await supabase.auth.getSession();
+    
+    if (session) {
+      await Promise.all([fetchCategories(), fetchTransactions()]);
+    }
+    setLoading(false);
+  }
+  initPage();
+}, []);
 
   async function handleInlineAddCategory() {
     if (!newCategoryName.trim()) return;
@@ -120,15 +156,29 @@ export default function TransactionsPage() {
     }
   }
 
-  const filteredTransactions = useMemo(() => {
+  const searchedTransactions = useMemo(() => {
     const normalized = query.trim().toLowerCase();
-    if (!normalized) return TRANSACTIONS;
+    if (!normalized) return transactions;
 
-    return TRANSACTIONS.filter((tx) =>
-      [tx.name, tx.category, tx.date].some((value) =>
+    return transactions.filter((tx) => {
+      const categoryName = tx.categories?.name || "Bez kategorie";
+      return [tx.name, categoryName, tx.date].some((value) =>
         value.toLowerCase().includes(normalized)
-      )
-    );
+      );
+    });
+  }, [query, transactions]);
+
+  const totalPages = useMemo(() => {
+    return Math.max(1, Math.ceil(searchedTransactions.length / ITEMS_PER_PAGE));
+  }, [searchedTransactions, ITEMS_PER_PAGE]);
+
+  const paginatedTransactions = useMemo(() => {
+    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+    return searchedTransactions.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+  }, [searchedTransactions, currentPage, ITEMS_PER_PAGE]);
+
+  useEffect(() => {
+    setCurrentPage(1);
   }, [query]);
 
   function closeModal() {
@@ -164,7 +214,7 @@ export default function TransactionsPage() {
             </span>
             <div>
               <h2 className="text-[15px] font-semibold text-foreground">Historie transakcí</h2>
-              <p className="text-[12px] text-muted-foreground">6 posledních pohybů na účtu</p>
+              <p className="text-[12px] text-muted-foreground">Zobrazeno {searchedTransactions.length} z {transactions.length} záznamů</p>
             </div>
           </div>
           <div className="relative w-full lg:w-72">
@@ -189,9 +239,9 @@ export default function TransactionsPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-border/60">
-              {filteredTransactions.map((tx) => (
-                <tr key={`${tx.date}-${tx.name}-${tx.amount}`} className="transition-colors hover:bg-secondary/20">
-                  <td className="px-4 py-3.5 text-muted-foreground">{tx.date}</td>
+              {paginatedTransactions.map((tx) => (
+                <tr key={tx.id} className="transition-colors hover:bg-secondary/20">
+                  <td className="px-4 py-3.5 text-muted-foreground">{new Date(tx.date).toLocaleDateString("cs")}</td>
                   <td className="px-4 py-3.5 font-medium text-foreground">
                     <button className="hover:underline" onClick={() => setModal({ type: "transaction", transaction: tx })}>
                       {tx.name}
@@ -199,15 +249,10 @@ export default function TransactionsPage() {
                   </td>
                   <td className="px-4 py-3.5">
                     <span className="rounded-full bg-secondary/70 px-2.5 py-1 text-[12px] text-secondary-foreground">
-                      {tx.category}
+                      {tx.categories?.name || "Bez kategorie"}
                     </span>
                   </td>
-                  <td
-                    className={cn(
-                      "px-4 py-3.5 text-right font-semibold tabular-nums",
-                      tx.amount > 0 ? "text-emerald-400" : "text-red-400"
-                    )}
-                  >
+                  <td className={cn("px-4 py-3.5 text-right font-semibold tabular-nums", tx.amount > 0 ? "text-emerald-400" : "text-red-400")}>
                     <span className="inline-flex items-center justify-end gap-1.5">
                       {tx.amount > 0 ? <ArrowUpRight className="size-3.5" /> : <ArrowDownLeft className="size-3.5" />}
                       {formatAmount(tx.amount)}
@@ -215,25 +260,47 @@ export default function TransactionsPage() {
                   </td>
                 </tr>
               ))}
+              {paginatedTransactions.length === 0 && (
+                <tr>
+                  <td colSpan={4} className="text-center py-8 text-muted-foreground">Nenalezeny žádné transakce.</td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
 
         <div className="mt-4 flex items-center justify-center gap-1.5">
-          <Button variant="secondary" size="icon-sm" aria-label="Předchozí stránka">
+          <Button 
+            variant="secondary" 
+            size="icon-sm" 
+            aria-label="Předchozí stránka"
+            disabled={currentPage === 1}
+            onClick={() => setCurrentPage((prev) => prev - 1)}
+          >
             <ChevronLeft className="size-4" />
-          </Button>
-          {[1, 2, 3, 4].map((page) => (
-            <Button
-              key={page}
-              variant={page === 1 ? "default" : "secondary"}
-              size="icon-sm"
-              aria-label={`Stránka ${page}`}
-            >
-              {page}
-            </Button>
-          ))}
-          <Button variant="secondary" size="icon-sm" aria-label="Další stránka">
+          </Button>       
+          {Array.from({ length: totalPages }).map((_, index) => {
+            const page = index + 1;
+            return (
+              <Button
+                key={page}
+                variant={page === currentPage ? "default" : "secondary"}
+                size="icon-sm"
+                aria-label={`Stránka ${page}`}
+                onClick={() => setCurrentPage(page)}
+              >
+                {page}
+              </Button>
+            );
+          })}
+          
+          <Button 
+            variant="secondary" 
+            size="icon-sm" 
+            aria-label="Další stránka"
+            disabled={currentPage === totalPages}
+            onClick={() => setCurrentPage((prev) => prev + 1)}
+          >
             <ChevronRight className="size-4" />
           </Button>
         </div>
@@ -323,7 +390,13 @@ export default function TransactionsPage() {
         </RevealGroup>
       )}
 
-      <TransactionDialogs modal={modal} onClose={closeModal} onRefreshCategories={fetchCategories} categories={categories} />
+      <TransactionDialogs 
+        modal={modal} 
+        onClose={closeModal} 
+        onRefreshCategories={fetchCategories} 
+        onRefreshTransactions={fetchTransactions}
+        categories={categories} 
+      />
     </div>
   );
 }
@@ -360,11 +433,13 @@ function TransactionDialogs({
   modal,
   onClose,
   onRefreshCategories,
+  onRefreshTransactions,
   categories,
 }: {
   modal: ModalState;
   onClose: () => void;
   onRefreshCategories: () => Promise<void>;
+  onRefreshTransactions: () => Promise<void>;
   categories: DbCategory[];
 }) {
   const supabase = createClient();
@@ -416,8 +491,54 @@ function TransactionDialogs({
         onClose();
       }
       
-      if (modal?.type === "transaction") {
-        success(modal.transaction ? "Transakce upravena" : "Transakce přidána");
+     if (modal?.type === "transaction") {
+        const formData = new FormData(e.currentTarget);
+        const name = formData.get("name") as string;
+        const date = formData.get("date") as string;
+        const amount = parseFloat(formData.get("amount") as string);
+        const categoryId = formData.get("category_id") ? parseInt(formData.get("category_id") as string) : null;
+
+        if (!name.trim() || !date || isNaN(amount)) {
+          throw new Error("Prosím vyplňte všechna povinná pole správně.");
+        }
+
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) throw new Error("Uživatel není přihlášen.");
+
+        const transactionType = amount >= 0 ? "income" : "expense";
+
+        if (modal.transaction) {
+          const { error } = await supabase
+            .from("transactions")
+            .update({
+              name: name.trim(),
+              date,
+              amount,
+              transaction_type: transactionType,
+              category_id: categoryId
+            })
+            .eq("id", modal.transaction.id);
+
+          if (error) throw error;
+          success("Transakce upravena", "Změny byly uloženy do databáze.");
+        } else {
+          const { error } = await supabase
+            .from("transactions")
+            .insert({
+              name: name.trim(),
+              date,
+              amount,
+              currency: "CZK",
+              user_id: user.id,
+              transaction_type: transactionType,
+              category_id: categoryId
+            });
+
+          if (error) throw error;
+          success("Transakce přidána", "Nová transakce byla uložena.");
+        }
+
+        await onRefreshTransactions();
         onClose();
       } else if (modal?.type === "recurring") {
         success(modal.item ? "Trvalý příkaz upraven" : "Trvalý příkaz přidán");
@@ -463,12 +584,23 @@ function TransactionDialogs({
         <form className="grid gap-4" onSubmit={handleSubmit}>
           <div className="grid gap-2">
             <Label htmlFor="transaction-name">Název</Label>
-            <Input id="transaction-name" name="name" defaultValue={isTransaction ? modal.transaction?.name : ""} />
+            <Input 
+              id="transaction-name" 
+              name="name" 
+              required 
+              defaultValue={isTransaction ? modal.transaction?.name : ""} 
+            />
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="grid gap-2">
               <Label htmlFor="transaction-date">Datum</Label>
-              <Input id="transaction-date" name="date" type="date" defaultValue="2026-02-03" />
+              <Input 
+                id="transaction-date" 
+                name="date" 
+                type="date" 
+                required 
+                defaultValue={isTransaction ? modal.transaction?.date : "2026-02-03"} 
+              />
             </div>
             <div className="grid gap-2">
               <Label htmlFor="transaction-amount">Částka</Label>
@@ -477,6 +609,7 @@ function TransactionDialogs({
                 name="amount"
                 type="number"
                 step="0.01"
+                required
                 defaultValue={isTransaction ? modal.transaction?.amount : ""}
               />
             </div>
@@ -485,12 +618,13 @@ function TransactionDialogs({
             <Label htmlFor="transaction-category">Kategorie</Label>
             <select
               id="transaction-category"
-              name="category"
-              defaultValue={isTransaction ? modal.transaction?.category : "Jídlo"}
+              name="category_id"
+              defaultValue={isTransaction ? (modal.transaction?.category_id ?? "") : ""}
               className="h-10 rounded-lg border border-input bg-input/30 px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
             >
+              <option value="">Bez kategorie</option>
               {categories.map((cat) => (
-                <option key={cat.id} value={cat.name}>{cat.name}</option>
+                <option key={cat.id} value={cat.id}>{cat.name}</option>
               ))}
             </select>
           </div>
