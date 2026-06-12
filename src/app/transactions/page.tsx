@@ -421,9 +421,7 @@ export default function TransactionsPage() {
                     <p className="text-[11px] text-muted-foreground">
                       {INTERVAL_LABELS[item.type] || "Neznámý"} · €{Math.abs(item.amount).toFixed(2)} · {item.categories?.name || "Bez kategorie"}
                     </p>
-                  </div>
-                  
-                  {/* Tlačítka jsou nyní v jednom flex bloku těsně vedle sebe na pravé straně */}
+                  </div>               
                   <div className="flex items-center gap-1 shrink-0 ml-4">
                     <Button
                       variant="ghost"

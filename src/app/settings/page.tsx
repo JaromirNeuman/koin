@@ -21,6 +21,7 @@ export default function SettingsPage() {
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [modal, setModal] = useState<SettingsModal>(null);
 
   const [userId, setUserId] = useState<string | null>(null);
@@ -83,6 +84,72 @@ export default function SettingsPage() {
       errorToast("Chyba při ukládání", err.message || "Nepodařilo se uložit data.");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleExportCSV(fromDate: string, toDate: string) {
+    if (!userId) return;
+    setExporting(true);
+
+    try {
+      const { data: transactions, error } = await supabase
+        .from("transactions")
+        .select(`
+          date,
+          name,
+          amount,
+          currency,
+          transaction_type,
+          categories ( name )
+        `)
+        .eq("user_id", userId)
+        .gte("date", fromDate)
+        .lte("date", toDate)
+        .order("date", { ascending: false });
+
+      if (error) throw error;
+
+      if (!transactions || transactions.length === 0) {
+        errorToast("Žádná data", "V zadaném časovém rozmezí nebyly nalezeny žádné transakce.");
+        return;
+      }
+
+      const headers = ["Datum", "Nazev", "Castka", "Mena", "Typ", "Kategorie"];
+      
+      const csvRows = transactions.map((tx) => {
+        const categoryName = (tx.categories as any)?.name || "Bez kategorie";
+        const escapedName = `"${tx.name.replace(/"/g, '""')}"`;
+        const escapedCategory = `"${categoryName.replace(/"/g, '""')}"`;
+
+        return [
+          tx.date,
+          escapedName,
+          tx.amount,
+          tx.currency,
+          tx.transaction_type,
+          escapedCategory
+        ].join(",");
+      });
+
+      const csvContent = "\uFEFF" + [headers.join(","), ...csvRows].join("\n");
+
+      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.setAttribute("href", url);
+      link.setAttribute("download", `export-transakci_${fromDate}_to_${toDate}.csv`);
+      link.style.visibility = "hidden";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      success("Export dokončen", "Soubor CSV byl úspěšně stažen.");
+      closeModal();
+    } catch (err: any) {
+      console.error("Chyba při exportu:", err);
+      errorToast("Chyba exportu", err.message || "Nepodařilo se vygenerovat CSV.");
+    } finally {
+      setExporting(false);
     }
   }
 
@@ -164,7 +231,9 @@ export default function SettingsPage() {
         modal={modal} 
         onClose={closeModal} 
         onConfirmSave={handleSaveProfile}
-        saving={saving} 
+        onConfirmExport={handleExportCSV}
+        saving={saving}
+        exporting={exporting}
       />
     </div>
   );
@@ -174,12 +243,16 @@ function SettingsDialogs({
   modal,
   onClose,
   onConfirmSave,
+  onConfirmExport,
   saving,
+  exporting,
 }: {
   modal: SettingsModal;
   onClose: () => void;
   onConfirmSave: () => Promise<void>;
+  onConfirmExport: (from: string, to: string) => Promise<void>;
   saving: boolean;
+  exporting: boolean;
 }) {
   const { success } = useToast();
 
@@ -192,11 +265,20 @@ function SettingsDialogs({
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    if (modal && modal !== "save-profile") {
-      const msg = MESSAGES[modal];
-      success(msg.title, msg.description);
+    
+    const formData = new FormData(e.currentTarget);
+
+    if (modal === "export-csv") {
+      const from = formData.get("from") as string;
+      const to = formData.get("to") as string;
+      onConfirmExport(from, to);
+    } else {
+      if (modal && modal !== "save-profile") {
+        const msg = MESSAGES[modal];
+        success(msg.title, msg.description);
+      }
+      onClose();
     }
-    onClose();
   }
 
   return (
@@ -258,8 +340,10 @@ function SettingsDialogs({
             </div>
           </div>
           <div className="flex justify-end gap-2 pt-2">
-            <Button type="button" variant="outline" onClick={onClose}>Zrušit</Button>
-            <Button type="submit">Vygenerovat CSV</Button>
+            <Button type="button" variant="outline" onClick={onClose} disabled={exporting}>Zrušit</Button>
+            <Button type="submit" disabled={exporting}>
+              {exporting ? "Generuji..." : "Vygenerovat CSV"}
+            </Button>
           </div>
         </form>
       </Modal>
