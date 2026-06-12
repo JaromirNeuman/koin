@@ -97,6 +97,18 @@ export default function TransactionsPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const ITEMS_PER_PAGE = 5; // Počet zobrazených položek na jedné stránce
 
+  
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [timeAgoText, setTimeAgoText] = useState("aktualizováno právě teď");
+
+  
+  const currentMonthYear = useMemo(() => {
+    const date = new Date();
+    const month = date.toLocaleString("cs-CZ", { month: "long" });
+    const capitalizedMonth = month.charAt(0).toUpperCase() + month.slice(1);
+    return `${capitalizedMonth} ${date.getFullYear()}`;
+  }, []);
+
   async function fetchCategories() {
     try {
       const { data, error } = await supabase
@@ -136,6 +148,7 @@ export default function TransactionsPage() {
     }
   }
 
+
   async function fetchStandingOrders() {
     try {
       const { data, error } = await supabase
@@ -173,6 +186,45 @@ export default function TransactionsPage() {
   initPage();
 }, []);
 
+
+  useEffect(() => {
+    async function initPage() {
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (session) {
+        await Promise.all([fetchCategories(), fetchTransactions(), fetchStandingOrders()]);
+        setLastUpdated(new Date());
+      }
+      setLoading(false);
+    }
+    initPage();
+  }, []);
+
+  
+  useEffect(() => {
+    if (!lastUpdated) return;
+
+    function updateText() {
+      const now = new Date();
+      const diffInMinutes = Math.floor((now.getTime() - lastUpdated!.getTime()) / 60000);
+
+      if (diffInMinutes < 1) {
+        setTimeAgoText("aktualizováno právě teď");
+      } else if (diffInMinutes === 1) {
+        setTimeAgoText("aktualizováno před 1 minutou");
+      } else if (diffInMinutes < 5) {
+        setTimeAgoText(`aktualizováno před ${diffInMinutes} minutami`);
+      } else {
+        setTimeAgoText(`aktualizováno před ${diffInMinutes} min`);
+      }
+    }
+
+    updateText();
+    const interval = setInterval(updateText, 60000);
+
+    return () => clearInterval(interval);
+  }, [lastUpdated]);
+
   async function handleInlineAddCategory() {
     if (!newCategoryName.trim()) return;
     setActionLoading(true);
@@ -190,6 +242,7 @@ export default function TransactionsPage() {
       success("Kategorie přidána", `Kategorie „${newCategoryName}“ byla úspěšně vytvořena.`);
       setNewCategoryName("");
       await fetchCategories();
+      setLastUpdated(new Date());
     } catch (err: any) {
       errorToast("Chyba při ukládání", err.message || "Nepodařilo se přidat kategorii.");
     } finally {
@@ -230,7 +283,7 @@ export default function TransactionsPage() {
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-6 py-7 lg:px-10">
       <PageHeader
         title="Transakce"
-        subtitle="Únor 2026 · aktualizované před 2 min"
+        subtitle={`${currentMonthYear} · ${timeAgoText}`}
         actions={
           <Button
             className="h-9 gap-2 bg-primary px-3 text-primary-foreground"
@@ -277,7 +330,7 @@ export default function TransactionsPage() {
                 <th className="px-4 py-3 font-semibold">Název</th>
                 <th className="px-4 py-3 font-semibold">Kategorie</th>
                 <th className="px-4 py-3 text-right font-semibold">Částka</th>
-                <th className="w-12 px-4 py-3"></th>
+                <th className="w-24 px-4 py-3 text-right"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border/60">
@@ -285,9 +338,7 @@ export default function TransactionsPage() {
                 <tr key={tx.id} className="transition-colors hover:bg-secondary/20">
                   <td className="px-4 py-3.5 text-muted-foreground">{new Date(tx.date).toLocaleDateString("cs")}</td>
                   <td className="px-4 py-3.5 font-medium text-foreground">
-                    <button className="hover:underline" onClick={() => setModal({ type: "transaction", transaction: tx })}>
-                      {tx.name}
-                    </button>
+                    {tx.name}
                   </td>
                   <td className="px-4 py-3.5">
                     <span className="rounded-full bg-secondary/70 px-2.5 py-1 text-[12px] text-secondary-foreground">
@@ -301,21 +352,31 @@ export default function TransactionsPage() {
                     </span>
                   </td>
                   <td className="px-4 py-3.5 text-right">
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      className="text-muted-foreground hover:text-destructive"
-                      aria-label={`Smazat transakci ${tx.name}`}
-                      onClick={() => setModal({ type: "delete-transaction", transaction: tx })}
-                    >
-                      <Trash2 className="size-3.5" />
-                    </Button>
+                    <div className="flex flex-row items-center justify-end gap-1 flex-nowrap">
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        aria-label={`Upravit transakci ${tx.name}`}
+                        onClick={() => setModal({ type: "transaction", transaction: tx })}
+                      >
+                        <Pencil className="size-3.5" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        className="text-muted-foreground hover:text-destructive"
+                        aria-label={`Smazat transakci ${tx.name}`}
+                        onClick={() => setModal({ type: "delete-transaction", transaction: tx })}
+                      >
+                        <Trash2 className="size-3.5" />
+                      </Button>
+                    </div>
                   </td>
                 </tr>
               ))}
               {paginatedTransactions.length === 0 && (
                 <tr>
-                  <td colSpan={4} className="text-center py-8 text-muted-foreground">Nenalezeny žádné transakce.</td>
+                  <td colSpan={5} className="text-center py-8 text-muted-foreground">Nenalezeny žádné transakce.</td>
                 </tr>
               )}
             </tbody>
@@ -463,6 +524,7 @@ export default function TransactionsPage() {
         onRefreshCategories={fetchCategories} 
         onRefreshTransactions={fetchTransactions}
         onRefreshStandingOrders={fetchStandingOrders}
+        setLastUpdated={setLastUpdated}
         categories={categories} 
       />
     </div>
@@ -503,6 +565,7 @@ function TransactionDialogs({
   onRefreshCategories,
   onRefreshTransactions,
   onRefreshStandingOrders,
+  setLastUpdated,
   categories,
 }: {
   modal: ModalState;
@@ -510,6 +573,7 @@ function TransactionDialogs({
   onRefreshCategories: () => Promise<void>;
   onRefreshTransactions: () => Promise<void>;
   onRefreshStandingOrders: () => Promise<void>;
+  setLastUpdated: React.Dispatch<React.SetStateAction<Date | null>>;
   categories: DbCategory[];
 }) {
   const supabase = createClient();
@@ -562,6 +626,7 @@ function TransactionDialogs({
         }
         
         await onRefreshCategories();
+        setLastUpdated(new Date());
         onClose();
       }
       
@@ -613,6 +678,7 @@ function TransactionDialogs({
         }
 
         await onRefreshTransactions();
+        setLastUpdated(new Date());
         onClose();
       } 
       
@@ -660,6 +726,7 @@ function TransactionDialogs({
         }
 
         await onRefreshStandingOrders();
+        setLastUpdated(new Date());
         onClose();
       }
     } catch (err: any) {
@@ -683,6 +750,7 @@ function TransactionDialogs({
 
       success("Kategorie smazána", `„${modal.category.name}“ byla úspěšně odebrána.`);
       await onRefreshCategories();
+      setLastUpdated(new Date());
       onClose();
     } catch (err: any) {
       errorToast("Chyba při mazání", err.message || "Nepodařilo se smazat kategorii.");
@@ -705,6 +773,7 @@ function TransactionDialogs({
 
       success("Transakce smazána", `Transakce „${modal.transaction.name}“ byla úspěšně odebrána.`);
       await onRefreshTransactions();
+      setLastUpdated(new Date());
       onClose();
     } catch (err: any) {
       errorToast("Chyba při mazání", err.message || "Nepodařilo se smazat transakci.");
@@ -727,6 +796,7 @@ function TransactionDialogs({
 
       success("Trvalý příkaz smazán", `Trvalý příkaz „${modal.item.name}“ byl úspěšně odebrán.`);
       await onRefreshStandingOrders();
+      setLastUpdated(new Date());
       onClose();
     } catch (err: any) {
       errorToast("Chyba při mazání", err.message || "Nepodařilo se smazat trvalý příkaz.");
@@ -761,7 +831,8 @@ function TransactionDialogs({
                 name="date" 
                 type="date" 
                 required 
-                defaultValue={isTransaction ? modal.transaction?.date : "2026-02-03"} 
+                defaultValue={isTransaction ? modal.transaction?.date : "2026-02-03"}
+                className="dark:[&::-webkit-calendar-picker-indicator]:invert text-foreground" 
               />
             </div>
             <div className="grid gap-2">
@@ -770,7 +841,7 @@ function TransactionDialogs({
                 id="transaction-amount"
                 name="amount"
                 type="number"
-                step="0.01"
+                step="any"
                 required
                 defaultValue={isTransaction ? modal.transaction?.amount : ""}
               />
@@ -784,9 +855,9 @@ function TransactionDialogs({
               defaultValue={isTransaction ? (modal.transaction?.category_id ?? "") : ""}
               className="h-10 rounded-lg border border-input bg-input/30 px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
             >
-              <option value="">Bez kategorie</option>
+              <option value="" className="bg-zinc-900 text-foreground">Bez kategorie</option>
               {categories.map((cat) => (
-                <option key={cat.id} value={cat.id}>{cat.name}</option>
+                <option key={cat.id} value={cat.id} className="bg-zinc-900 text-foreground" >{cat.name}</option>
               ))}
             </select>
           </div>
@@ -861,11 +932,19 @@ function TransactionDialogs({
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="grid gap-2">
               <Label htmlFor="recurring-amount">Částka</Label>
-              <Input id="recurring-amount" name="amount" type="number" step="0.01" required defaultValue={isRecurring ? modal.item?.amount : ""} />
+              <Input 
+                id="recurring-amount" 
+                name="amount" 
+                type="number" 
+                step="any" 
+                required 
+                defaultValue={isRecurring ? modal.item?.amount : ""}
+               />
             </div>
             <div className="grid gap-2">
               <Label htmlFor="recurring-date">První/Počáteční datum</Label>
-              <Input id="recurring-date" name="date" type="date" required defaultValue={isRecurring ? modal.item?.date : "2026-02-01"} />
+              <Input id="recurring-date" name="date" type="date" required defaultValue={isRecurring ? modal.item?.date : "2026-02-01"}
+              className="dark:[&::-webkit-calendar-picker-indicator]:invert text-foreground" />
             </div>
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
@@ -877,9 +956,9 @@ function TransactionDialogs({
                 defaultValue={isRecurring ? modal.item?.type : "monthly"}
                 className="h-10 rounded-lg border border-input bg-input/30 px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
               >
-                <option value="weekly">Týdně</option>
-                <option value="monthly">Měsíčně</option>
-                <option value="yearly">Ročně</option>
+                <option value="weekly" className="bg-zinc-900 text-foreground">Týdně</option>
+                <option value="monthly" className="bg-zinc-900 text-foreground">Měsíčně</option>
+                <option value="yearly" className="bg-zinc-900 text-foreground">Ročně</option>
               </select>
             </div>
             <div className="grid gap-2">
@@ -890,9 +969,9 @@ function TransactionDialogs({
                 defaultValue={isRecurring ? (modal.item?.category_id ?? "") : ""}
                 className="h-10 rounded-lg border border-input bg-input/30 px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
               >
-                <option value="">Bez kategorie</option>
+                <option value="" className="bg-zinc-900 text-foreground">Bez kategorie</option>
                 {categories.map((cat) => (
-                  <option key={cat.id} value={cat.id}>{cat.name}</option>
+                  <option key={cat.id} value={cat.id} className="bg-zinc-900 text-foreground">{cat.name}</option>
                 ))}
               </select>
             </div>
