@@ -13,6 +13,7 @@ import {
   Search,
   Tag,
   X,
+  Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -25,12 +26,6 @@ import { PageHeader } from "@/components/layout/page-header";
 import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
-
-const RECURRING = [
-  { name: "Nájem", amount: 750, interval: "Měsíčně", category: "Bydlení" },
-  { name: "Netflix", amount: 12.99, interval: "Měsíčně", category: "Zábava" },
-  { name: "Spotify", amount: 6.99, interval: "Měsíčně", category: "Zábava" },
-];
 
 type DbTransaction = {
   id: number;
@@ -49,13 +44,32 @@ type DbCategory = {
   name: string;
 };
 
-type Recurring = (typeof RECURRING)[number];
+type DbStandingOrder = {
+  id: number;
+  name: string;
+  amount: number;
+  date: string;
+  type: string; // Pro intervaly: 'weekly' | 'monthly' | 'yearly'
+  currency: string;
+  user_id: string;
+  category_id: number | null;
+  categories?: { name: string } | null;
+};
+
 type ModalState =
   | { type: "transaction"; transaction?: DbTransaction }
+  | { type: "delete-transaction"; transaction: DbTransaction }
   | { type: "category"; category?: DbCategory }
   | { type: "delete-category"; category: DbCategory }
-  | { type: "recurring"; item?: Recurring }
+  | { type: "recurring"; item?: DbStandingOrder }
+  | { type: "delete-recurring"; item: DbStandingOrder }
   | null;
+
+const INTERVAL_LABELS: Record<string, string> = {
+  weekly: "Týdně",
+  monthly: "Měsíčně",
+  yearly: "Ročně",
+};
 
 function formatAmount(amount: number) {
   return `${amount > 0 ? "+" : "-"} €${Math.abs(amount).toLocaleString("cs", {
@@ -77,6 +91,8 @@ export default function TransactionsPage() {
   const [actionLoading, setActionLoading] = useState(false);
 
   const [transactions, setTransactions] = useState<DbTransaction[]>([]);
+
+  const [standingOrders, setStandingOrders] = useState<DbStandingOrder[]>([]);
 
   const [currentPage, setCurrentPage] = useState(1);
   const ITEMS_PER_PAGE = 5; // Počet zobrazených položek na jedné stránce
@@ -120,12 +136,37 @@ export default function TransactionsPage() {
     }
   }
 
+  async function fetchStandingOrders() {
+    try {
+      const { data, error } = await supabase
+        .from("standing_orders")
+        .select(`
+          id, 
+          name, 
+          amount, 
+          date, 
+          type, 
+          currency, 
+          user_id, 
+          category_id, 
+          categories ( name )
+        `)
+        .order("name", { ascending: true });
+
+      if (error) throw error;
+      if (data) setStandingOrders(data as unknown as DbStandingOrder[]);
+    } catch (err: any) {
+      console.error("Chyba při načítání trvalých příkazů:", err.message || err);
+      errorToast("Chyba stahování", "Nepodařilo se načíst trvalé příkazy.");
+    }
+  }
+
   useEffect(() => {
   async function initPage() {
     const { data: { session } } = await supabase.auth.getSession();
     
     if (session) {
-      await Promise.all([fetchCategories(), fetchTransactions()]);
+      await Promise.all([fetchCategories(), fetchTransactions(), fetchStandingOrders()]);
     }
     setLoading(false);
   }
@@ -236,6 +277,7 @@ export default function TransactionsPage() {
                 <th className="px-4 py-3 font-semibold">Název</th>
                 <th className="px-4 py-3 font-semibold">Kategorie</th>
                 <th className="px-4 py-3 text-right font-semibold">Částka</th>
+                <th className="w-12 px-4 py-3"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border/60">
@@ -257,6 +299,17 @@ export default function TransactionsPage() {
                       {tx.amount > 0 ? <ArrowUpRight className="size-3.5" /> : <ArrowDownLeft className="size-3.5" />}
                       {formatAmount(tx.amount)}
                     </span>
+                  </td>
+                  <td className="px-4 py-3.5 text-right">
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      className="text-muted-foreground hover:text-destructive"
+                      aria-label={`Smazat transakci ${tx.name}`}
+                      onClick={() => setModal({ type: "delete-transaction", transaction: tx })}
+                    >
+                      <Trash2 className="size-3.5" />
+                    </Button>
                   </td>
                 </tr>
               ))}
@@ -352,39 +405,55 @@ export default function TransactionsPage() {
         </RevealItem>
 
         <RevealItem>
-        <Card className="px-5 py-5">
-          <div className="flex items-center gap-2">
-            <RotateCcw className="size-4 text-primary" />
-            <h2 className="text-[15px] font-semibold text-foreground">Trvalé příkazy</h2>
-          </div>
-          <div className="flex flex-col gap-2">
-            {RECURRING.map((item) => (
-              <div
-                key={item.name}
-                className="flex items-center justify-between rounded-lg border border-border/60 bg-secondary/45 px-3 py-3"
-              >
-                <div>
-                  <p className="text-[13px] font-medium text-foreground">{item.name}</p>
-                  <p className="text-[11px] text-muted-foreground">
-                    {item.interval} · €{item.amount.toFixed(2)} · {item.category}
-                  </p>
-                </div>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-label={`Upravit ${item.name}`}
-                  onClick={() => setModal({ type: "recurring", item })}
+          <Card className="px-5 py-5">
+            <div className="flex items-center gap-2 mb-4">
+              <RotateCcw className="size-4 text-primary" />
+              <h2 className="text-[15px] font-semibold text-foreground">Trvalé příkazy</h2>
+            </div>
+            <div className="flex flex-col gap-2">
+              {standingOrders.map((item) => (
+                <div
+                  key={item.id}
+                  className="flex items-center justify-between rounded-lg border border-border/60 bg-secondary/45 px-3 py-3"
                 >
-                  <Pencil className="size-4" />
-                </Button>
-              </div>
-            ))}
-          </div>
-          <Button variant="outline" className="h-10" onClick={() => setModal({ type: "recurring" })}>
-            <Plus className="size-4" />
-            Přidat trvalý příkaz
-          </Button>
-        </Card>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[13px] font-medium text-foreground truncate">{item.name}</p>
+                    <p className="text-[11px] text-muted-foreground">
+                      {INTERVAL_LABELS[item.type] || "Neznámý"} · €{Math.abs(item.amount).toFixed(2)} · {item.categories?.name || "Bez kategorie"}
+                    </p>
+                  </div>
+                  
+                  {/* Tlačítka jsou nyní v jednom flex bloku těsně vedle sebe na pravé straně */}
+                  <div className="flex items-center gap-1 shrink-0 ml-4">
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      aria-label={`Upravit ${item.name}`}
+                      onClick={() => setModal({ type: "recurring", item })}
+                    >
+                      <Pencil className="size-3.5" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      className="text-muted-foreground hover:text-destructive"
+                      aria-label={`Smazat trvalý příkaz ${item.name}`}
+                      onClick={() => setModal({ type: "delete-recurring", item })}
+                    >
+                      <Trash2 className="size-3.5" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+              {standingOrders.length === 0 && (
+                <p className="text-[12px] text-muted-foreground py-2 text-center">Žádné trvalé příkazy nenalezeny.</p>
+              )}
+            </div>
+            <Button variant="outline" className="h-10 mt-2" onClick={() => setModal({ type: "recurring" })}>
+              <Plus className="size-4" />
+              Přidat trvalý příkaz
+            </Button>
+          </Card>
         </RevealItem>
       </div>
         </RevealGroup>
@@ -395,6 +464,7 @@ export default function TransactionsPage() {
         onClose={closeModal} 
         onRefreshCategories={fetchCategories} 
         onRefreshTransactions={fetchTransactions}
+        onRefreshStandingOrders={fetchStandingOrders}
         categories={categories} 
       />
     </div>
@@ -434,21 +504,25 @@ function TransactionDialogs({
   onClose,
   onRefreshCategories,
   onRefreshTransactions,
+  onRefreshStandingOrders,
   categories,
 }: {
   modal: ModalState;
   onClose: () => void;
   onRefreshCategories: () => Promise<void>;
   onRefreshTransactions: () => Promise<void>;
+  onRefreshStandingOrders: () => Promise<void>;
   categories: DbCategory[];
 }) {
   const supabase = createClient();
   const { success, error: errorToast } = useToast();
 
   const isTransaction = modal?.type === "transaction";
+  const isDeleteTransaction = modal?.type === "delete-transaction";
   const isCategory = modal?.type === "category";
   const isDeleteCategory = modal?.type === "delete-category";
   const isRecurring = modal?.type === "recurring";
+  const isDeleteRecurring = modal?.type === "delete-recurring";
 
   const [editCategoryName, setEditCategoryName] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -466,6 +540,8 @@ function TransactionDialogs({
     setSubmitting(true);
 
     try {
+      const formData = new FormData(e.currentTarget);
+      
       if (modal?.type === "category") {
         if (modal.category) {
           const { error } = await supabase
@@ -540,8 +616,52 @@ function TransactionDialogs({
 
         await onRefreshTransactions();
         onClose();
-      } else if (modal?.type === "recurring") {
-        success(modal.item ? "Trvalý příkaz upraven" : "Trvalý příkaz přidán");
+      } 
+      
+      if (modal?.type === "recurring") {
+        const name = formData.get("name") as string;
+        const amount = parseFloat(formData.get("amount") as string);
+        const date = formData.get("date") as string;
+        const type = formData.get("type") as string; // interval (weekly, monthly, yearly)
+        const categoryId = formData.get("category_id") ? parseInt(formData.get("category_id") as string) : null;
+
+        if (!name.trim() || !date || isNaN(amount) || !type) {
+          throw new Error("Vyplňte prosím všechna povinná pole.");
+        }
+
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) throw new Error("Uživatel není přihlášen.");
+
+        const transactionType = amount >= 0 ? "income" : "expense";
+
+        const orderData = {
+          name: name.trim(),
+          amount,
+          date,
+          type,
+          currency: "CZK",
+          user_id: user.id,
+          category_id: categoryId,
+        };
+
+        if (modal.item) {
+          const { error } = await supabase
+            .from("standing_orders")
+            .update(orderData)
+            .eq("id", modal.item.id);
+
+          if (error) throw error;
+          success("Trvalý příkaz upraven", "Změny byly úspěšně uloženy.");
+        } else {
+          const { error } = await supabase
+            .from("standing_orders")
+            .insert(orderData);
+
+          if (error) throw error;
+          success("Trvalý příkaz přidán", "Nový trvalý příkaz byl vytvořen.");
+        }
+
+        await onRefreshStandingOrders();
         onClose();
       }
     } catch (err: any) {
@@ -568,6 +688,50 @@ function TransactionDialogs({
       onClose();
     } catch (err: any) {
       errorToast("Chyba při mazání", err.message || "Nepodařilo se smazat kategorii.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function handleDeleteTransaction() {
+    if (modal?.type !== "delete-transaction") return;
+    setSubmitting(true);
+
+    try {
+      const { error } = await supabase
+        .from("transactions")
+        .delete()
+        .eq("id", modal.transaction.id);
+
+      if (error) throw error;
+
+      success("Transakce smazána", `Transakce „${modal.transaction.name}“ byla úspěšně odebrána.`);
+      await onRefreshTransactions();
+      onClose();
+    } catch (err: any) {
+      errorToast("Chyba při mazání", err.message || "Nepodařilo se smazat transakci.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function handleDeleteStandingOrder() {
+    if (modal?.type !== "delete-recurring") return;
+    setSubmitting(true);
+
+    try {
+      const { error } = await supabase
+        .from("standing_orders")
+        .delete()
+        .eq("id", modal.item.id);
+
+      if (error) throw error;
+
+      success("Trvalý příkaz smazán", `Trvalý příkaz „${modal.item.name}“ byl úspěšně odebrán.`);
+      await onRefreshStandingOrders();
+      onClose();
+    } catch (err: any) {
+      errorToast("Chyba při mazání", err.message || "Nepodařilo se smazat trvalý příkaz.");
     } finally {
       setSubmitting(false);
     }
@@ -634,7 +798,19 @@ function TransactionDialogs({
           </div>
         </form>
       </Modal>
-
+      <Modal
+        open={isDeleteTransaction}
+        title="Smazat transakci"
+        description={isDeleteTransaction ? `Opravdu chcete smazat transakci „${modal.transaction.name}“? Tato akce je nevratná.` : undefined}
+        onClose={onClose}
+      >
+        <div className="flex justify-end gap-2">
+          <Button type="button" variant="outline" onClick={onClose}>Zrušit</Button>
+          <Button type="button" variant="destructive" onClick={handleDeleteTransaction} disabled={submitting}>
+            {submitting ? "Mažu..." : "Smazat"}
+          </Button>
+        </div>
+      </Modal>        
       <Modal
         open={isCategory}
         title={modal?.type === "category" && modal.category ? "Upravit kategorii" : "Přidat kategorii"}
@@ -676,42 +852,73 @@ function TransactionDialogs({
       <Modal
         open={isRecurring}
         title={modal?.type === "recurring" && modal.item ? "Upravit trvalý příkaz" : "Přidat trvalý příkaz"}
-        description="Opakovaná platba může backendu vytvořit šablonu pro automatické transakce."
+        description="Vytvořte nebo upravte šablonu trvalého příkazu se specifickým intervalem opakování."
         onClose={onClose}
       >
         <form className="grid gap-4" onSubmit={handleSubmit}>
           <div className="grid gap-2">
-            <Label htmlFor="recurring-name">Název</Label>
-            <Input id="recurring-name" name="name" defaultValue={isRecurring ? modal.item?.name : ""} />
-          </div>
+            <Label htmlFor="recurring-name">Název příkazu</Label>
+            <Input id="recurring-name" name="name" required defaultValue={isRecurring ? modal.item?.name : ""} />
+          </div>       
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="grid gap-2">
               <Label htmlFor="recurring-amount">Částka</Label>
-              <Input id="recurring-amount" name="amount" type="number" step="0.01" defaultValue={isRecurring ? modal.item?.amount : ""} />
+              <Input id="recurring-amount" name="amount" type="number" step="0.01" required defaultValue={isRecurring ? modal.item?.amount : ""} />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="recurring-day">Den v měsíci</Label>
-              <Input id="recurring-day" name="day" type="number" min="1" max="31" defaultValue="1" />
+              <Label htmlFor="recurring-date">První/Počáteční datum</Label>
+              <Input id="recurring-date" name="date" type="date" required defaultValue={isRecurring ? modal.item?.date : "2026-02-01"} />
             </div>
           </div>
-          <div className="grid gap-2">
-            <Label htmlFor="recurring-category">Kategorie</Label>
-            <select
-              id="recurring-category"
-              name="category"
-              defaultValue={isRecurring ? modal.item?.category : "Bydlení"}
-              className="h-10 rounded-lg border border-input bg-input/30 px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-            >
-              {categories.map((cat) => (
-                <option key={cat.id} value={cat.name}>{cat.name}</option>
-              ))}
-            </select>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid gap-2">
+              <Label htmlFor="recurring-type">Interval opakování</Label>
+              <select
+                id="recurring-type"
+                name="type"
+                defaultValue={isRecurring ? modal.item?.type : "monthly"}
+                className="h-10 rounded-lg border border-input bg-input/30 px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+              >
+                <option value="weekly">Týdně</option>
+                <option value="monthly">Měsíčně</option>
+                <option value="yearly">Ročně</option>
+              </select>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="recurring-category">Kategorie</Label>
+              <select
+                id="recurring-category"
+                name="category_id"
+                defaultValue={isRecurring ? (modal.item?.category_id ?? "") : ""}
+                className="h-10 rounded-lg border border-input bg-input/30 px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+              >
+                <option value="">Bez kategorie</option>
+                {categories.map((cat) => (
+                  <option key={cat.id} value={cat.id}>{cat.name}</option>
+                ))}
+              </select>
+            </div>
           </div>
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="outline" onClick={onClose}>Zrušit</Button>
-            <Button type="submit">Uložit</Button>
+            <Button type="submit" disabled={submitting}>
+              {submitting ? "Ukládám..." : "Uložit"}
+            </Button>
           </div>
         </form>
+      </Modal>
+      <Modal
+        open={isDeleteRecurring}
+        title="Smazat trvalý příkaz"
+        description={isDeleteRecurring ? `Opravdu chcete smazat trvalý příkaz „${modal.item.name}“? Automatické generování transakcí pro tento příkaz se zastaví.` : undefined}
+        onClose={onClose}
+      >
+        <div className="flex justify-end gap-2">
+          <Button type="button" variant="outline" onClick={onClose}>Zrušit</Button>
+          <Button type="button" variant="destructive" onClick={handleDeleteStandingOrder} disabled={submitting}>
+            {submitting ? "Mažu..." : "Smazat"}
+          </Button>
+        </div>
       </Modal>
     </>
   );
