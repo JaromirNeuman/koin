@@ -4,52 +4,101 @@ import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 
-const CATEGORIES = [
-  { label: "Bydlení",  pct: 0.38, color: "oklch(0.68 0.2  300)" },
-  { label: "Jídlo",    pct: 0.22, color: "oklch(0.60 0.22 270)" },
-  { label: "Doprava",  pct: 0.14, color: "oklch(0.52 0.2  255)" },
-  { label: "Zábava",   pct: 0.12, color: "oklch(0.45 0.18 245)" },
-  { label: "Ostatní",  pct: 0.14, color: "oklch(0.32 0.06 255)" },
+const COLORS = [
+  "oklch(0.68 0.2  300)",
+  "oklch(0.60 0.22 270)",
+  "oklch(0.52 0.2  255)", 
+  "oklch(0.45 0.18 245)", 
+  "oklch(0.32 0.06 255)",
 ];
 
-const SEGMENTS = CATEGORIES.reduce<
-  Array<(typeof CATEGORIES)[number] & { start: number }>
->((segments, category) => {
-  const start = segments.reduce((sum, segment) => sum + segment.pct, 0);
-  return [...segments, { ...category, start }];
-}, []);
+interface CleanTransaction {
+  name: string;
+  category: string;
+  time: string;
+  amount: number;
+}
 
-export function CategoryDonut() {
+export function CategoryDonut({
+  transactions,
+  type,
+}: {
+  transactions: CleanTransaction[];
+  type: "income" | "expense";
+}) {
   const [active, setActive] = useState<number | null>(null);
-  const r    = 58;
-  const cx   = 75;
-  const cy   = 75;
+
+  const filteredTx = transactions.filter((tx) =>
+    type === "income" ? tx.amount > 0 : tx.amount < 0
+  );
+
+  const totalAmount = filteredTx.reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
+
+  const aggregated: Record<string, number> = {};
+  filteredTx.forEach((tx) => {
+    const catName = tx.category || "Bez kategorie";
+    aggregated[catName] = (aggregated[catName] || 0) + Math.abs(tx.amount);
+  });
+
+  const dynamicCategories = Object.entries(aggregated).map(([label, value], i) => {
+    const pct = totalAmount > 0 ? value / totalAmount : 0;
+    return {
+      label,
+      pct,
+      color: COLORS[i % COLORS.length],
+    };
+  });
+
+  const segments = dynamicCategories.reduce<
+    Array<(typeof dynamicCategories)[number] & { start: number }>
+  >((acc, category) => {
+    const start = acc.reduce((sum, segment) => sum + segment.pct, 0);
+    return [...acc, { ...category, start }];
+  }, []);
+
+  const r = 58;
+  const cx = 75;
+  const cy = 75;
   const circ = 2 * Math.PI * r;
 
-  const activeCat = active !== null ? CATEGORIES[active] : null;
+  const activeCat = active !== null ? dynamicCategories[active] : null;
+
+  if (dynamicCategories.length === 0) {
+    return (
+      <div className="flex h-[150px] items-center justify-center text-xs text-muted-foreground">
+        Žádná data pro tento typ transakcí.
+      </div>
+    );
+  }
 
   return (
     <div className="flex items-center gap-5">
       <div className="relative shrink-0">
         <svg width={150} height={150} viewBox="0 0 150 150" aria-hidden="true">
-          {SEGMENTS.map(({ label, pct, color, start }, i) => {
+          {segments.map(({ label, pct, color, start }, i) => {
             const dim = active !== null && active !== i;
             return (
               <motion.circle
                 key={label}
-                cx={cx} cy={cy} r={r}
+                cx={cx}
+                cy={cy}
+                r={r}
                 fill="none"
                 stroke={color}
                 strokeLinecap="butt"
                 transform={`rotate(${-90 + start * 360} ${cx} ${cy})`}
                 initial={{ strokeDasharray: `0 ${circ}`, opacity: 0 }}
                 animate={{
-                  strokeDasharray: `${pct * circ} ${circ}`,
+                  strokeDasharray: `${(pct === 1 ? 0.9999 : pct) * circ} ${circ}`,
                   strokeWidth: active === i ? 26 : 20,
                   opacity: dim ? 0.3 : 1,
                 }}
                 transition={{
-                  strokeDasharray: { duration: 0.9, delay: 0.15 + i * 0.09, ease: [0.16, 1, 0.3, 1] },
+                  strokeDasharray: {
+                    duration: 0.9,
+                    delay: 0.15 + i * 0.09,
+                    ease: [0.16, 1, 0.3, 1],
+                  },
                   opacity: { duration: 0.35, delay: 0.15 + i * 0.09 },
                   strokeWidth: { type: "spring", stiffness: 400, damping: 26 },
                   default: { duration: 0.25 },
@@ -78,14 +127,14 @@ export function CategoryDonut() {
               {Math.round((activeCat?.pct ?? 1) * 100)}%
             </motion.span>
           </AnimatePresence>
-          <span className="text-[10px] text-muted-foreground">
+          <span className="text-[10px] text-muted-foreground text-center truncate max-w-[65px]">
             {activeCat?.label ?? "celkem"}
           </span>
         </div>
       </div>
 
       <ul className="flex flex-col gap-2">
-        {CATEGORIES.map(({ label, pct, color }, i) => (
+        {dynamicCategories.map(({ label, pct, color }, i) => (
           <li
             key={label}
             onMouseEnter={() => setActive(i)}
