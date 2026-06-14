@@ -15,6 +15,23 @@ import { createClient } from "@/lib/supabase/client";
 
 type SettingsModal = "save-profile" | "import" | "export-csv" | "annual-report" | null;
 
+function getErrorMessage(err: unknown, fallback: string) {
+  return err instanceof Error ? err.message : fallback;
+}
+
+function getCategoryName(categories: unknown) {
+  if (Array.isArray(categories)) {
+    const first = categories[0];
+    return typeof first === "object" && first !== null && "name" in first
+      ? String(first.name)
+      : "Bez kategorie";
+  }
+
+  return typeof categories === "object" && categories !== null && "name" in categories
+    ? String(categories.name)
+    : "Bez kategorie";
+}
+
 export default function SettingsPage() {
   const supabase = createClient();
   const { success, error: errorToast } = useToast();
@@ -79,9 +96,9 @@ export default function SettingsPage() {
 
       success("Profil uložen", "Změny preferencí byly úspěšně uloženy.");
       closeModal();
-    } catch (err: any) {
+    } catch (err) {
       console.error("Chyba při ukládání:", err);
-      errorToast("Chyba při ukládání", err.message || "Nepodařilo se uložit data.");
+      errorToast("Chyba při ukládání", getErrorMessage(err, "Nepodařilo se uložit data."));
     } finally {
       setSaving(false);
     }
@@ -117,7 +134,7 @@ export default function SettingsPage() {
       const headers = ["Datum", "Nazev", "Castka", "Mena", "Typ", "Kategorie"];
       
       const csvRows = transactions.map((tx) => {
-        const categoryName = (tx.categories as any)?.name || "Bez kategorie";
+        const categoryName = getCategoryName(tx.categories);
         const escapedName = `"${tx.name.replace(/"/g, '""')}"`;
         const escapedCategory = `"${categoryName.replace(/"/g, '""')}"`;
 
@@ -145,16 +162,16 @@ export default function SettingsPage() {
 
       success("Export dokončen", "Soubor CSV byl úspěšně stažen.");
       closeModal();
-    } catch (err: any) {
+    } catch (err) {
       console.error("Chyba při exportu:", err);
-      errorToast("Chyba exportu", err.message || "Nepodařilo se vygenerovat CSV.");
+      errorToast("Chyba exportu", getErrorMessage(err, "Nepodařilo se vygenerovat CSV."));
     } finally {
       setExporting(false);
     }
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-6 py-7 lg:px-10">
+    <div className="mx-auto flex w-full max-w-6xl flex-col gap-5 px-4 py-5 sm:gap-6 sm:px-6 sm:py-7 lg:px-10">
       <PageHeader title="Nastavení" subtitle="Únor 2026 · aktualizované před 2 min" />
 
       {loading ? (
@@ -165,7 +182,7 @@ export default function SettingsPage() {
       ) : (
         <RevealGroup className="grid gap-5 lg:grid-cols-2">
         <RevealItem>
-        <Card className="px-6 py-6">
+        <Card className="px-4 py-5 sm:px-6 sm:py-6">
           <div className="flex items-center gap-2">
             <UserCircle className="size-5 text-primary" />
             <h2 className="text-base font-semibold text-foreground">Profil a preference</h2>
@@ -193,7 +210,7 @@ export default function SettingsPage() {
         </RevealItem>
 
         <RevealItem>
-        <Card className="px-6 py-6">
+        <Card className="px-4 py-5 sm:px-6 sm:py-6">
           <div className="flex items-center gap-2">
             <HardDriveDownload className="size-5 text-primary" />
             <h2 className="text-base font-semibold text-foreground">Data a záloha</h2>

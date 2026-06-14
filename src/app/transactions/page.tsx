@@ -78,6 +78,10 @@ function formatAmount(amount: number) {
   })}`;
 }
 
+function getErrorMessage(err: unknown, fallback: string) {
+  return err instanceof Error ? err.message : fallback;
+}
+
 export default function TransactionsPage() {
   const supabase = createClient();
   const { success, error: errorToast } = useToast();
@@ -118,7 +122,7 @@ export default function TransactionsPage() {
 
       if (error) throw error;
       if (data) setCategories(data);
-    } catch (err: any) {
+    } catch (err) {
       console.error("Chyba při načítání kategorií:", err);
     }
   }
@@ -142,7 +146,7 @@ export default function TransactionsPage() {
 
       if (error) throw error;
       if (data) setTransactions(data as unknown as DbTransaction[]);
-    } catch (err: any) {
+    } catch (err) {
       console.error("Chyba při načítání transakcí:", err);
       errorToast("Chyba stahování", "Nepodařilo se načíst transakce.");
     }
@@ -168,24 +172,11 @@ export default function TransactionsPage() {
 
       if (error) throw error;
       if (data) setStandingOrders(data as unknown as DbStandingOrder[]);
-    } catch (err: any) {
-      console.error("Chyba při načítání trvalých příkazů:", err.message || err);
+    } catch (err) {
+      console.error("Chyba při načítání trvalých příkazů:", getErrorMessage(err, "Neznámá chyba"));
       errorToast("Chyba stahování", "Nepodařilo se načíst trvalé příkazy.");
     }
   }
-
-  useEffect(() => {
-  async function initPage() {
-    const { data: { session } } = await supabase.auth.getSession();
-    
-    if (session) {
-      await Promise.all([fetchCategories(), fetchTransactions(), fetchStandingOrders()]);
-    }
-    setLoading(false);
-  }
-  initPage();
-}, []);
-
 
   useEffect(() => {
     async function initPage() {
@@ -243,8 +234,8 @@ export default function TransactionsPage() {
       setNewCategoryName("");
       await fetchCategories();
       setLastUpdated(new Date());
-    } catch (err: any) {
-      errorToast("Chyba při ukládání", err.message || "Nepodařilo se přidat kategorii.");
+    } catch (err) {
+      errorToast("Chyba při ukládání", getErrorMessage(err, "Nepodařilo se přidat kategorii."));
     } finally {
       setActionLoading(false);
     }
@@ -271,22 +262,18 @@ export default function TransactionsPage() {
     return searchedTransactions.slice(startIndex, startIndex + ITEMS_PER_PAGE);
   }, [searchedTransactions, currentPage, ITEMS_PER_PAGE]);
 
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [query]);
-
   function closeModal() {
     setModal(null);
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-6 py-7 lg:px-10">
+    <div className="mx-auto flex w-full max-w-7xl flex-col gap-5 px-4 py-5 sm:gap-6 sm:px-6 sm:py-7 lg:px-10">
       <PageHeader
         title="Transakce"
         subtitle={`${currentMonthYear} · ${timeAgoText}`}
         actions={
           <Button
-            className="h-9 gap-2 bg-primary px-3 text-primary-foreground"
+            className="h-9 w-full gap-2 bg-primary px-3 text-primary-foreground sm:w-auto"
             onClick={() => setModal({ type: "transaction" })}
           >
             <Plus className="size-4" />
@@ -300,7 +287,7 @@ export default function TransactionsPage() {
       ) : (
         <RevealGroup className="flex flex-col gap-6">
         <RevealItem>
-      <Card className="gap-0 px-5 py-5">
+      <Card className="gap-0 px-4 py-5 sm:px-5">
         <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex min-w-0 items-center gap-3">
             <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-secondary text-muted-foreground">
@@ -317,12 +304,15 @@ export default function TransactionsPage() {
               className="h-9 pl-8"
               placeholder="Hledat transakci..."
               value={query}
-              onChange={(e) => setQuery(e.target.value)}
+              onChange={(e) => {
+                setQuery(e.target.value);
+                setCurrentPage(1);
+              }}
             />
           </div>
         </div>
 
-        <div className="overflow-hidden rounded-lg border border-border/70">
+        <div className="overflow-x-auto rounded-lg border border-border/70">
           <table className="w-full min-w-[720px] border-collapse text-left text-[13px]">
             <thead className="bg-secondary/35 text-[11px] uppercase tracking-wider text-muted-foreground">
               <tr>
@@ -423,7 +413,7 @@ export default function TransactionsPage() {
 
       <div className="grid gap-5 xl:grid-cols-[1fr_0.95fr]">
         <RevealItem>
-        <Card className="px-5 py-5">
+        <Card className="px-4 py-5 sm:px-5">
           <div className="flex items-center gap-2">
             <Tag className="size-4 text-primary" />
             <h2 className="text-[15px] font-semibold text-foreground">Správa kategorií</h2>
@@ -466,7 +456,7 @@ export default function TransactionsPage() {
         </RevealItem>
 
         <RevealItem>
-          <Card className="px-5 py-5">
+          <Card className="px-4 py-5 sm:px-5">
             <div className="flex items-center gap-2 mb-4">
               <RotateCcw className="size-4 text-primary" />
               <h2 className="text-[15px] font-semibold text-foreground">Trvalé příkazy</h2>
@@ -586,16 +576,7 @@ function TransactionDialogs({
   const isRecurring = modal?.type === "recurring";
   const isDeleteRecurring = modal?.type === "delete-recurring";
 
-  const [editCategoryName, setEditCategoryName] = useState("");
   const [submitting, setSubmitting] = useState(false);
-
-  useEffect(() => {
-    if (modal?.type === "category" && modal.category) {
-      setEditCategoryName(modal.category.name);
-    } else {
-      setEditCategoryName("");
-    }
-  }, [modal]);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -605,10 +586,16 @@ function TransactionDialogs({
       const formData = new FormData(e.currentTarget);
       
       if (modal?.type === "category") {
+        const categoryName = (formData.get("name") as string).trim();
+
+        if (!categoryName) {
+          throw new Error("Vyplňte prosím název kategorie.");
+        }
+
         if (modal.category) {
           const { error } = await supabase
             .from("categories")
-            .update({ name: editCategoryName.trim() })
+            .update({ name: categoryName })
             .eq("id", modal.category.id);
 
           if (error) throw error;
@@ -619,7 +606,7 @@ function TransactionDialogs({
 
           const { error } = await supabase
             .from("categories")
-            .insert({ name: editCategoryName.trim(), user_id: user.id });
+            .insert({ name: categoryName, user_id: user.id });
 
           if (error) throw error;
           success("Kategorie přidána", "Nová kategorie byla uložena.");
@@ -696,8 +683,6 @@ function TransactionDialogs({
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) throw new Error("Uživatel není přihlášen.");
 
-        const transactionType = amount >= 0 ? "income" : "expense";
-
         const orderData = {
           name: name.trim(),
           amount,
@@ -729,8 +714,8 @@ function TransactionDialogs({
         setLastUpdated(new Date());
         onClose();
       }
-    } catch (err: any) {
-      errorToast("Chyba při ukládání", err.message || "Operace se nezdařila.");
+    } catch (err) {
+      errorToast("Chyba při ukládání", getErrorMessage(err, "Operace se nezdařila."));
     } finally {
       setSubmitting(false);
     }
@@ -752,8 +737,8 @@ function TransactionDialogs({
       await onRefreshCategories();
       setLastUpdated(new Date());
       onClose();
-    } catch (err: any) {
-      errorToast("Chyba při mazání", err.message || "Nepodařilo se smazat kategorii.");
+    } catch (err) {
+      errorToast("Chyba při mazání", getErrorMessage(err, "Nepodařilo se smazat kategorii."));
     } finally {
       setSubmitting(false);
     }
@@ -775,8 +760,8 @@ function TransactionDialogs({
       await onRefreshTransactions();
       setLastUpdated(new Date());
       onClose();
-    } catch (err: any) {
-      errorToast("Chyba při mazání", err.message || "Nepodařilo se smazat transakci.");
+    } catch (err) {
+      errorToast("Chyba při mazání", getErrorMessage(err, "Nepodařilo se smazat transakci."));
     } finally {
       setSubmitting(false);
     }
@@ -798,8 +783,8 @@ function TransactionDialogs({
       await onRefreshStandingOrders();
       setLastUpdated(new Date());
       onClose();
-    } catch (err: any) {
-      errorToast("Chyba při mazání", err.message || "Nepodařilo se smazat trvalý příkaz.");
+    } catch (err) {
+      errorToast("Chyba při mazání", getErrorMessage(err, "Nepodařilo se smazat trvalý příkaz."));
     } finally {
       setSubmitting(false);
     }
@@ -891,8 +876,8 @@ function TransactionDialogs({
             <Label htmlFor="category-name">Název kategorie</Label>
             <Input 
               id="category-name" 
-              value={editCategoryName} 
-              onChange={(e) => setEditCategoryName(e.target.value)} 
+              name="name"
+              defaultValue={modal?.type === "category" ? modal.category?.name : ""}
               disabled={submitting}
               placeholder="Např. Nákupy, Cestování..."
             />

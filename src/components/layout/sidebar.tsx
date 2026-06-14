@@ -23,13 +23,14 @@ const NAV = [
   { href: "/settings",     label: "Nastavení",    icon: Settings },
 ];
 
+export { NAV };
+
 export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
   const { navigate } = usePageTransition();
   const supabase = createClient();
 
   const [profile, setProfile] = useState<Profile | null>(null);
-  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function loadUserData() {
@@ -53,7 +54,6 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
           });
         }
       }
-      setLoading(false);
     }
 
     loadUserData();

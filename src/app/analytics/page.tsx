@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useSearchParams } from "next/navigation";
 import { BarChart3, ListOrdered, PiggyBank, TrendingDown, TrendingUp } from "lucide-react";
@@ -14,6 +14,19 @@ import { createClient } from "@/lib/supabase/client";
 
 type AggregatedExpense = { name: string; value: number };
 type MonthlyData = { monthLabel: string; income: number; expenses: number; savings: number };
+
+function getCategoryName(categories: unknown) {
+  if (Array.isArray(categories)) {
+    const first = categories[0];
+    return typeof first === "object" && first !== null && "name" in first
+      ? String(first.name)
+      : "Bez kategorie";
+  }
+
+  return typeof categories === "object" && categories !== null && "name" in categories
+    ? String(categories.name)
+    : "Bez kategorie";
+}
 
 function MetricCard({
   label,
@@ -117,6 +130,23 @@ export function SavingsBars({ data }: { data: MonthlyData[] }) {
 }
 
 export default function AnalyticsPage() {
+  return (
+    <Suspense fallback={<AnalyticsPageFallback />}>
+      <AnalyticsPageContent />
+    </Suspense>
+  );
+}
+
+function AnalyticsPageFallback() {
+  return (
+    <div className="mx-auto flex w-full max-w-7xl flex-col gap-5 px-4 py-5 sm:gap-6 sm:px-6 sm:py-7 lg:px-10">
+      <PageHeader title="Analytika" subtitle="Načítám přehled..." />
+      <AnalyticsSkeleton />
+    </div>
+  );
+}
+
+function AnalyticsPageContent() {
   const supabase = createClient();
   const searchParams = useSearchParams();
   
@@ -186,7 +216,7 @@ export default function AnalyticsPage() {
             totalExpenses += amount;
             monthlyMap[monthLabel].expenses += amount;
 
-            const catName = (tx.categories as any)?.name || "Bez kategorie";
+            const catName = getCategoryName(tx.categories);
             categoryMap[catName] = (categoryMap[catName] || 0) + amount;
           }
         });
@@ -228,10 +258,10 @@ export default function AnalyticsPage() {
   }, [supabase, selectedYear, currentYear]);
 
   return (
-    <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-6 py-7 lg:px-10">
-      <PageHeader 
-        title="Analytika" 
-        subtitle={`Přehled za rok ${selectedYear} · Aktualizováno právě teď`} 
+    <div className="mx-auto flex w-full max-w-7xl flex-col gap-5 px-4 py-5 sm:gap-6 sm:px-6 sm:py-7 lg:px-10">
+      <PageHeader
+        title="Analytika"
+        subtitle={`Přehled za rok ${selectedYear} · Aktualizováno právě teď`}
       />
 
       {loading ? (
@@ -292,7 +322,7 @@ function AnalyticsContent({
         </RevealItem>
       </div>
       <RevealItem>
-        <Card className="gap-0 px-5 pb-3 pt-5">
+        <Card className="gap-0 px-4 pb-3 pt-5 sm:px-5">
           <div className="mb-3 flex items-start justify-between">
             <div>
               <div className="flex items-center gap-2">
@@ -316,14 +346,14 @@ function AnalyticsContent({
 
       <div className="grid gap-5 xl:grid-cols-[1fr_0.5fr]">
         <RevealItem>
-          <Card className="px-5 py-5">
+          <Card className="px-4 py-5 sm:px-5">
             <h2 className="text-[15px] font-semibold text-foreground">Trend měsíčních úspor</h2>
             <SavingsBars data={monthlyHistory} />
           </Card>
         </RevealItem>
 
         <RevealItem>
-          <Card className="px-5 py-5">
+          <Card className="px-4 py-5 sm:px-5">
             <div className="flex items-center gap-2 mb-3">
               <ListOrdered className="size-4 text-muted-foreground" />
               <h2 className="text-[15px] font-semibold text-foreground">Největší výdaje</h2>

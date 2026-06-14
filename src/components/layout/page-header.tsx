@@ -17,7 +17,7 @@ export function PageHeader({
           <p className="mt-1 flex items-center gap-1.5 text-[13px] text-muted-foreground">{subtitle}</p>
         )}
       </div>
-      {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}
+      {actions && <div className="flex w-full shrink-0 items-center gap-2 sm:w-auto">{actions}</div>}
     </header>
   );
 }

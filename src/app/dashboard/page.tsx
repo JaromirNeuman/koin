@@ -182,6 +182,15 @@ const TRANSACTIONS = [
   },
 ];
 
+const DASHBOARD_CHART_DATA = [
+  { monthLabel: "Aug", income: 3050, expenses: 2100, savings: 950 },
+  { monthLabel: "Sep", income: 3300, expenses: 2350, savings: 950 },
+  { monthLabel: "Okt", income: 3200, expenses: 2200, savings: 1000 },
+  { monthLabel: "Nov", income: 3600, expenses: 2700, savings: 900 },
+  { monthLabel: "Dec", income: 3900, expenses: 2600, savings: 1300 },
+  { monthLabel: "Jan", income: 3850, expenses: 2400, savings: 1450 },
+];
+
 // ─── Widget model ───────────────────────────────────────────────────────────────
 type WidgetId = "stats" | "trend" | "categories" | "transactions";
 type WidgetSize = "sm" | "lg";
@@ -284,7 +293,7 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-6 py-7 lg:px-10">
+    <div className="mx-auto flex w-full max-w-7xl flex-col gap-5 px-4 py-5 sm:gap-6 sm:px-6 sm:py-7 lg:px-10">
       {/* Header */}
       <PageHeader
         title="Přehled"
@@ -303,7 +312,7 @@ export default function DashboardPage() {
             {editing ? (
               <motion.div
                 key="editing"
-                className="flex items-center gap-2"
+                className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:items-center"
                 initial={{ opacity: 0, x: 8 }}
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: 8 }}
@@ -321,17 +330,17 @@ export default function DashboardPage() {
             ) : (
               <motion.div
                 key="default"
-                className="flex items-center gap-2"
+                className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:items-center"
                 initial={{ opacity: 0, x: -8 }}
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -8 }}
                 transition={{ duration: 0.15 }}
               >
-                <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
+                <Button variant="outline" size="sm" className="h-9" onClick={() => setEditing(true)}>
                   <Settings2 className="size-3.5" />
                   Upravit widgety
                 </Button>
-                <Button variant="secondary" size="sm" onClick={() => setModal("transaction")}>
+                <Button variant="secondary" size="sm" className="h-9" onClick={() => setModal("transaction")}>
                   <Plus className="size-3.5" />
                   Přidat transakci
                 </Button>
@@ -557,7 +566,7 @@ function WidgetContent({ id }: { id: WidgetId }) {
               Výdaje
             </span>
           </div>
-          <IncomeExpensesChart />
+          <IncomeExpensesChart data={DASHBOARD_CHART_DATA} />
         </Card>
       );
 

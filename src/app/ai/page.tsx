@@ -277,7 +277,7 @@ export default function AiPage() {
   }
 
   return (
-    <div className="mx-auto flex h-full w-full max-w-7xl flex-col gap-6 px-6 py-7 lg:px-10">
+    <div className="mx-auto flex min-h-full w-full max-w-7xl flex-col gap-5 px-4 py-5 sm:gap-6 sm:px-6 sm:py-7 lg:px-10">
       <PageHeader
         title="AI Přehled"
         subtitle="Osobní finanční asistent nad vašimi transakcemi"
@@ -312,7 +312,7 @@ export default function AiPage() {
       />
 
       {loading ? (
-        <div className="grid min-h-0 flex-1 gap-5 xl:grid-cols-[1fr_340px]">
+        <div className="grid min-h-[520px] flex-1 gap-5 xl:grid-cols-[1fr_340px]">
           <Card className="gap-4 px-5 py-5">
             <Skeleton className="h-5 w-36" />
             <div className="flex flex-col gap-4">
@@ -331,7 +331,7 @@ export default function AiPage() {
           </div>
         </div>
       ) : (
-      <RevealGroup className="grid min-h-0 flex-1 gap-5 xl:grid-cols-[1fr_340px]">
+      <RevealGroup className="grid min-h-[520px] flex-1 gap-5 xl:grid-cols-[1fr_340px]">
         <RevealItem className="min-h-0">
         <Card className="h-full min-h-0 gap-0 overflow-hidden ring-1 ring-foreground/[0.08] shadow-[0_10px_30px_-18px_rgba(0,0,0,0.7)]">
           <div className="flex items-center justify-between border-b border-border/60 px-5 py-4">
