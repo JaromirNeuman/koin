@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  Bot,
   CalendarClock,
   Lightbulb,
   Loader2,
@@ -18,6 +17,7 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { RevealGroup, RevealItem } from "@/components/ui/reveal";
 import { Skeleton } from "@/components/ui/skeleton";
+import { AiBlob } from "@/components/ui/ai-blob";
 import { PageHeader } from "@/components/layout/page-header";
 import { createClient } from "@/lib/supabase/client";
 import { formatMoney } from "@/lib/money";
@@ -538,9 +538,7 @@ export default function AiPage() {
             <Card className="h-full min-h-0 gap-0 overflow-hidden ring-1 ring-foreground/[0.08] shadow-[0_10px_30px_-18px_rgba(0,0,0,0.7)]">
               <div className="flex items-center justify-between border-b border-border/60 px-5 py-4">
                 <div className="flex items-center gap-2.5">
-                  <span className="flex size-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                    <Bot className="size-4" />
-                  </span>
+                  <AiBlob size={32} />
                   <div>
                     <h2 className="text-[14px] font-semibold leading-tight text-foreground">
                       Koin AI
@@ -556,7 +554,6 @@ export default function AiPage() {
                 <div className="flex-1 space-y-4 overflow-auto px-5 py-5">
                   {messages.map((message, index) => {
                     const assistant = message.role === "assistant";
-                    const Icon = assistant ? Bot : User;
 
                     return (
                       <motion.div
@@ -574,11 +571,7 @@ export default function AiPage() {
                           assistant ? "justify-start" : "justify-end",
                         )}
                       >
-                        {assistant && (
-                          <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
-                            <Icon className="size-4" />
-                          </span>
-                        )}
+                        {assistant && <AiBlob size={32} className="mt-0.5" />}
                         <div
                           className={cn(
                             "max-w-[78%] rounded-2xl px-4 py-3 text-[13px] leading-5 shadow-sm",
@@ -595,7 +588,7 @@ export default function AiPage() {
                         </div>
                         {!assistant && (
                           <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-indigo-500 text-white">
-                            <Icon className="size-4" />
+                            <User className="size-4" />
                           </span>
                         )}
                       </motion.div>
@@ -611,9 +604,7 @@ export default function AiPage() {
                         exit={{ opacity: 0, y: -6 }}
                         className="flex gap-3"
                       >
-                        <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
-                          <Bot className="size-4" />
-                        </span>
+                        <AiBlob size={32} className="mt-0.5" />
                         <div className="flex items-center rounded-2xl rounded-tl-sm border border-border/70 bg-secondary/40 px-4 py-3">
                           <span className="text-shimmer text-[13px] font-medium">
                             přemýšlí…
