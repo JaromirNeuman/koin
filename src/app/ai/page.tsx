@@ -19,12 +19,36 @@ import { Input } from "@/components/ui/input";
 import { RevealGroup, RevealItem } from "@/components/ui/reveal";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PageHeader } from "@/components/layout/page-header";
+import { createClient } from "@/lib/supabase/client";
+import { formatMoney } from "@/lib/money";
+import { useProfileCurrency } from "@/lib/use-profile-currency";
 import { cn } from "@/lib/utils";
 
 type Message = {
   role: "assistant" | "user";
   content: string;
 };
+
+type FinanceSummary = {
+  income: number;
+  expenses: number;
+  savings: number;
+  savingsRate: number;
+  biggest?: { name: string; amount: number };
+  byCategory: { name: string; amount: number }[];
+  monthLabel: string;
+  hasData: boolean;
+};
+
+function catName(categories: unknown): string {
+  if (Array.isArray(categories)) {
+    const f = categories[0];
+    return f && typeof f === "object" && "name" in f ? String(f.name) : "Bez kategorie";
+  }
+  return categories && typeof categories === "object" && "name" in categories
+    ? String((categories as { name: string }).name)
+    : "Bez kategorie";
+}
 
 // ─── Minimal markdown rendering (bold / italic / code / lists) ───────────────────
 function renderInline(text: string, keyPrefix: string): React.ReactNode[] {
@@ -240,13 +264,77 @@ export default function AiPage() {
 
   const bottomRef = useRef<HTMLDivElement>(null);
   const timers = useRef<number[]>([]);
+  const currency = useProfileCurrency();
+  const [summary, setSummary] = useState<FinanceSummary | null>(null);
 
   const busy = thinking || streaming;
   const lastMessage = messages[messages.length - 1];
 
+  // Load this month's real financial summary from Supabase.
   useEffect(() => {
-    const timeout = window.setTimeout(() => setLoading(false), 550);
-    return () => window.clearTimeout(timeout);
+    let active = true;
+    (async () => {
+      try {
+        const supabase = createClient();
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+        const now = new Date();
+        const y = now.getFullYear();
+        const m = now.getMonth();
+        const pad = (n: number) => String(n).padStart(2, "0");
+        const start = `${y}-${pad(m + 1)}-01`;
+        const end = `${y}-${pad(m + 1)}-${pad(new Date(y, m + 1, 0).getDate())}`;
+        const monthLabel = now.toLocaleString("cs-CZ", { month: "long" });
+
+        let income = 0;
+        let expenses = 0;
+        const cat: Record<string, number> = {};
+
+        if (user) {
+          const { data } = await supabase
+            .from("transactions")
+            .select("amount, transaction_type, categories ( name )")
+            .eq("user_id", user.id)
+            .gte("date", start)
+            .lte("date", end);
+          for (const t of data ?? []) {
+            const amt = Math.abs(t.amount);
+            if (t.transaction_type === "income") income += amt;
+            else {
+              expenses += amt;
+              const n = catName(t.categories);
+              cat[n] = (cat[n] ?? 0) + amt;
+            }
+          }
+        }
+
+        const byCategory = Object.entries(cat)
+          .map(([name, amount]) => ({ name, amount }))
+          .sort((a, b) => b.amount - a.amount);
+        const savings = income - expenses;
+
+        if (active) {
+          setSummary({
+            income,
+            expenses,
+            savings,
+            savingsRate: income > 0 ? (savings / income) * 100 : 0,
+            biggest: byCategory[0],
+            byCategory,
+            monthLabel,
+            hasData: income > 0 || expenses > 0,
+          });
+        }
+      } catch {
+        /* signed-out / offline — leave summary null */
+      } finally {
+        if (active) setLoading(false);
+      }
+    })();
+    return () => {
+      active = false;
+    };
   }, []);
 
   // Clear any pending timers on unmount
@@ -260,15 +348,42 @@ export default function AiPage() {
     bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [messages, thinking]);
 
-  const latestInsight = useMemo(
-    () => [
-      { label: "Úspory tento měsíc", value: "49 000 Kč" },
-      { label: "Míra úspor", value: "45,6 %" },
-      { label: "Největší výdaj", value: "Nájem" },
-      { label: "Riziko rozpočtu", value: "Auto" },
-    ],
-    [],
-  );
+  const latestInsight = useMemo(() => {
+    if (!summary || !summary.hasData) return [];
+    return [
+      { label: "Úspory tento měsíc", value: formatMoney(summary.savings, currency) },
+      { label: "Míra úspor", value: `${summary.savingsRate.toFixed(1)} %` },
+      { label: "Největší výdaj", value: summary.biggest?.name ?? "—" },
+      { label: "Příjmy", value: formatMoney(summary.income, currency) },
+    ];
+  }, [summary, currency]);
+
+  const recommendation = useMemo(() => {
+    if (!summary || !summary.hasData)
+      return "Přidejte první transakce a já navrhnu, kde můžete ušetřit.";
+    const rate = summary.savingsRate.toFixed(0);
+    if (summary.biggest && summary.savingsRate < 20)
+      return `Vaše míra úspor je ${rate} %. Zvažte měsíční limit na „${summary.biggest.name}" (${formatMoney(summary.biggest.amount, currency)}) a cílte na 20 %.`;
+    if (summary.biggest)
+      return `Skvělá práce — míra úspor ${rate} %. Největší výdaj je „${summary.biggest.name}" (${formatMoney(summary.biggest.amount, currency)}); hlídejte si ho.`;
+    return `Míra úspor ${rate} %. Pokračujte v tomto tempu.`;
+  }, [summary, currency]);
+
+  function buildContext(): string | undefined {
+    if (!summary || !summary.hasData) return undefined;
+    return [
+      `Měsíc: ${summary.monthLabel}`,
+      `Příjmy: ${formatMoney(summary.income, currency)}`,
+      `Výdaje: ${formatMoney(summary.expenses, currency)}`,
+      `Úspory: ${formatMoney(summary.savings, currency)} (${summary.savingsRate.toFixed(1)} %)`,
+      `Výdaje dle kategorií: ${
+        summary.byCategory
+          .slice(0, 6)
+          .map((c) => `${c.name} ${formatMoney(c.amount, currency)}`)
+          .join(", ") || "žádné"
+      }`,
+    ].join("\n");
+  }
 
   function appendToLast(chunk: string) {
     setMessages((current) => {
@@ -310,7 +425,7 @@ export default function AiPage() {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: history }),
+        body: JSON.stringify({ messages: history, context: buildContext() }),
       });
 
       // No key (503) or any error → graceful demo fallback.
@@ -592,22 +707,28 @@ export default function AiPage() {
                   </h2>
                 </div>
                 <div className="grid gap-3">
-                  {latestInsight.map((item, i) => (
-                    <motion.div
-                      key={item.label}
-                      initial={{ opacity: 0, x: 8 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: 0.1 + i * 0.07 }}
-                      className="rounded-lg border border-border/60 bg-secondary/30 px-3 py-3 transition-colors hover:border-foreground/15 hover:bg-secondary/50"
-                    >
-                      <p className="text-[11px] uppercase tracking-wider text-muted-foreground">
-                        {item.label}
-                      </p>
-                      <p className="mt-1 text-[15px] font-semibold text-foreground">
-                        {item.value}
-                      </p>
-                    </motion.div>
-                  ))}
+                  {latestInsight.length === 0 ? (
+                    <p className="rounded-lg border border-dashed border-border/60 bg-secondary/20 px-3 py-4 text-[13px] text-muted-foreground">
+                      Zatím žádná data tento měsíc. Přidejte transakce a uvidíte živé přehledy.
+                    </p>
+                  ) : (
+                    latestInsight.map((item, i) => (
+                      <motion.div
+                        key={item.label}
+                        initial={{ opacity: 0, x: 8 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: 0.1 + i * 0.07 }}
+                        className="rounded-lg border border-border/60 bg-secondary/30 px-3 py-3 transition-colors hover:border-foreground/15 hover:bg-secondary/50"
+                      >
+                        <p className="text-[11px] uppercase tracking-wider text-muted-foreground">
+                          {item.label}
+                        </p>
+                        <p className="mt-1 text-[15px] font-semibold text-foreground">
+                          {item.value}
+                        </p>
+                      </motion.div>
+                    ))
+                  )}
                 </div>
               </Card>
             </RevealItem>
@@ -621,8 +742,7 @@ export default function AiPage() {
                   </h2>
                 </div>
                 <p className="text-[13px] leading-5 text-muted-foreground">
-                  Nastavte limit 2 400 Kč pro zábavu do konce týdne. Podle
-                  trendu vám to udrží měsíční úsporu nad 45 % příjmů.
+                  {recommendation}
                 </p>
               </Card>
             </RevealItem>

@@ -70,6 +70,7 @@ export default function RegisterPage() {
   const [showConfirm, setShowConfirm] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [passwordTouched, setPasswordTouched] = useState(false);
 
   const strength = useMemo(() => getStrength(password), [password]);
@@ -93,7 +94,7 @@ export default function RegisterPage() {
 
     const supabase = createClient();
 
-    const { error: signUpError } = await supabase.auth.signUp({
+    const { data, error: signUpError } = await supabase.auth.signUp({
       email,
       password,
       options: {
@@ -106,6 +107,17 @@ export default function RegisterPage() {
     if (signUpError) {
       setError(signUpError.message);
       setLoading(false);
+      return;
+    }
+
+    // With email confirmation enabled, signUp returns no session — the user
+    // must confirm before they can sign in. Show a clear message instead of
+    // sending them into a gated onboarding flow.
+    if (!data.session) {
+      setLoading(false);
+      setNotice(
+        "Účet byl vytvořen. Potvrďte prosím registraci v e-mailu a poté se přihlaste.",
+      );
       return;
     }
 
@@ -326,7 +338,22 @@ export default function RegisterPage() {
                 </AnimatePresence>
               </div>
 
-              <Button type="submit" className="w-full" disabled={loading}>
+              <AnimatePresence>
+                {notice && (
+                  <motion.p
+                    key="notice"
+                    initial={{ opacity: 0, y: -4 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -4 }}
+                    transition={{ duration: 0.15 }}
+                    className="rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-300"
+                  >
+                    {notice}
+                  </motion.p>
+                )}
+              </AnimatePresence>
+
+              <Button type="submit" className="w-full" disabled={loading || !!notice}>
                 <AnimatePresence mode="wait" initial={false}>
                   {loading ? (
                     <motion.span

@@ -8,16 +8,9 @@ type ChatMessage = { role: ChatRole; content: string };
 const SYSTEM_PROMPT = `Jsi „Koin AI", osobní finanční asistent v aplikaci pro správu rozpočtu.
 Odpovídáš česky, stručně, prakticky a přátelsky. Zaměřuješ se na rozpočet, výdaje, úspory a cíle.
 
-Aktuální data uživatele (únor 2026):
-    - Příjem: 107 500 Kč
-    - Výdaje: 58 500 Kč
-    - Úspory: 49 000 Kč (45,6 % příjmu)
-    - Největší kategorie: bydlení/nájem 18 750 Kč, jídlo, doprava, zábava
-- Riziko: nepravidelné výdaje za auto
+Pokud dostaneš aktuální data uživatele, vycházej z nich a používej konkrétní čísla i měnu z těchto dat. Pokud data nemáš, řekni to a poraď obecně — nikdy si nevymýšlej konkrétní částky.
 
-Když navrhuješ částky, používej české koruny ve formátu např. 3 000 Kč. Drž odpovědi stručné.
-
-Formátování (Markdown): pro výčty používej odrážky "- " nebo číslovaný seznam "1. " (každá položka na vlastním řádku, ne v jednom odstavci). Klíčové pojmy a částky zvýrazni **tučně**. Bez nadpisů a tabulek.`;
+Formátování (Markdown): pro výčty používej odrážky "- " nebo číslovaný seznam "1. " (každá položka na vlastním řádku, ne v jednom odstavci). Klíčové pojmy a částky zvýrazni **tučně**. Bez nadpisů a tabulek. Drž odpovědi stručné.`;
 
 const MODEL =
   process.env.OPENAI_MODEL ??
@@ -33,13 +26,23 @@ export async function POST(req: NextRequest) {
   }
 
   let messages: ChatMessage[];
+  let context = "";
   try {
     const body = await req.json();
     messages = Array.isArray(body?.messages)
       ? (body.messages as ChatMessage[])
       : [];
+    if (typeof body?.context === "string") context = body.context.slice(0, 2000);
   } catch {
     return Response.json({ error: "bad_request" }, { status: 400 });
+  }
+
+  const systemMessages: ChatMessage[] = [{ role: "system", content: SYSTEM_PROMPT }];
+  if (context.trim()) {
+    systemMessages.push({
+      role: "system",
+      content: `Aktuální finanční data uživatele:\n${context}`,
+    });
   }
 
   const sanitized = messages
@@ -64,7 +67,7 @@ export async function POST(req: NextRequest) {
         model: MODEL,
         stream: true,
         temperature: 0.4,
-        messages: [{ role: "system", content: SYSTEM_PROMPT }, ...sanitized],
+        messages: [...systemMessages, ...sanitized],
       }),
     });
   } catch {

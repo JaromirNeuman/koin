@@ -76,6 +76,7 @@ function StatCard({
   valueColor,
   badge,
   badgeDirection,
+  badgeTone,
   accent,
   icon: Icon,
   delay = 0,
@@ -86,12 +87,15 @@ function StatCard({
   valueColor?: "green" | "red";
   badge: string;
   badgeDirection: "up" | "down" | "flat";
+  /** Color of the badge; defaults to badgeDirection. Lets "good" decreases stay green. */
+  badgeTone?: "up" | "down" | "flat";
   accent: Accent;
   icon: React.ComponentType<{ className?: string }>;
   delay?: number;
   currency: string;
 }) {
   const a = ACCENT[accent];
+  const tone = badgeTone ?? badgeDirection;
   const ArrowIcon = badgeDirection === "down" ? ArrowDownRight : ArrowUpRight;
   return (
     <Card className={cn("group/stat gap-3 px-5 py-5", DASHBOARD_CARD, a.ring)}>
@@ -136,9 +140,9 @@ function StatCard({
       <span
         className={cn(
           "inline-flex w-fit items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium",
-          badgeDirection === "down"
+          tone === "down"
             ? "bg-red-500/12 text-red-400"
-            : badgeDirection === "up"
+            : tone === "up"
               ? "bg-emerald-500/12 text-emerald-400"
               : "bg-indigo-500/12 text-indigo-400",
         )}
@@ -763,7 +767,18 @@ function WidgetContent({
   currency: string;
 }) {
   switch (id) {
-    case "stats":
+    case "stats": {
+      const cur = chartData[chartData.length - 1];
+      const prev = chartData[chartData.length - 2];
+      const pctChange = (now: number, before: number) =>
+        before > 0 ? ((now - before) / before) * 100 : now > 0 ? 100 : 0;
+
+      const incomePct = prev ? pctChange(cur.income, prev.income) : 0;
+      const expensePct = prev ? pctChange(cur.expenses, prev.expenses) : 0;
+      const netDelta = cur && prev ? cur.savings - prev.savings : 0;
+      const savingsRate = stats.income > 0 ? (stats.savings / stats.income) * 100 : 0;
+      const prevMonth = prev?.monthLabel;
+
       return (
         <div className="grid h-full gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <StatCard
@@ -771,8 +786,12 @@ function WidgetContent({
             value={stats.balance}
             icon={Wallet}
             accent="violet"
-            badge={`${formatMoney(320, currency)} oproti prosinci`}
-            badgeDirection="up"
+            badge={
+              prevMonth
+                ? `${formatMoney(Math.abs(netDelta), currency)} oproti ${prevMonth}`
+                : "Tento rok"
+            }
+            badgeDirection={prevMonth ? (netDelta >= 0 ? "up" : "down") : "flat"}
             delay={0}
             currency={currency}
           />
@@ -782,8 +801,8 @@ function WidgetContent({
             valueColor="green"
             icon={TrendingUp}
             accent="emerald"
-            badge="12.5% MoM"
-            badgeDirection="up"
+            badge={prev ? `${Math.abs(incomePct).toFixed(1)} % MoM` : "Tento rok"}
+            badgeDirection={prev ? (incomePct >= 0 ? "up" : "down") : "flat"}
             delay={0.08}
             currency={currency}
           />
@@ -793,8 +812,10 @@ function WidgetContent({
             valueColor="red"
             icon={TrendingDown}
             accent="red"
-            badge="8.2% MoM"
-            badgeDirection="down"
+            badge={prev ? `${Math.abs(expensePct).toFixed(1)} % MoM` : "Tento rok"}
+            badgeDirection={prev ? (expensePct >= 0 ? "up" : "down") : "flat"}
+            // For expenses a decrease is good (green), an increase is bad (red).
+            badgeTone={prev ? (expensePct > 0 ? "down" : "up") : "flat"}
             delay={0.16}
             currency={currency}
           />
@@ -803,13 +824,14 @@ function WidgetContent({
             value={stats.savings}
             icon={PiggyBank}
             accent="indigo"
-            badge="45.6% z příjmů"
+            badge={`${savingsRate.toFixed(1)} % z příjmů`}
             badgeDirection="flat"
             delay={0.24}
             currency={currency}
           />
         </div>
       );
+    }
 
     case "trend":
       return (
