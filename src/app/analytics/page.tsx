@@ -5,8 +5,13 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useSearchParams } from "next/navigation";
 import {
   BarChart3,
+  CalendarRange,
+  Hash,
+  Layers,
   ListOrdered,
+  Percent,
   PiggyBank,
+  Receipt,
   TrendingDown,
   TrendingUp,
 } from "lucide-react";
@@ -184,6 +189,12 @@ function AnalyticsPageContent() {
   const [topExpenses, setTopExpenses] = useState<AggregatedExpense[]>([]);
   const [monthlyHistory, setMonthlyHistory] = useState<MonthlyData[]>([]);
 
+  const [savingsRate, setSavingsRate] = useState(0);
+  const [transactionCount, setTransactionCount] = useState(0);
+  const [categoryBreakdown, setCategoryBreakdown] = useState<AggregatedExpense[]>([]);
+  const [bestMonth, setBestMonth] = useState<MonthlyData | null>(null);
+  const [avgDailySpend, setAvgDailySpend] = useState(0);
+
   useEffect(() => {
     async function fetchAndCalculateAnalytics() {
       try {
@@ -218,6 +229,11 @@ function AnalyticsPageContent() {
           setTotalSavings(0);
           setTopExpenses([]);
           setMonthlyHistory([]);
+          setSavingsRate(0);
+          setTransactionCount(0);
+          setCategoryBreakdown([]);
+          setBestMonth(null);
+          setAvgDailySpend(0);
           return;
         }
 
@@ -271,11 +287,11 @@ function AnalyticsPageContent() {
         setAvgExpenses(totalExpenses / monthsCount);
         setTotalSavings(totalIncome - totalExpenses);
 
-        const sortedExpenses = Object.entries(categoryMap)
+        const sortedCategories = Object.entries(categoryMap)
           .map(([name, value]) => ({ name, value }))
-          .sort((a, b) => b.value - a.value)
-          .slice(0, 5);
-        setTopExpenses(sortedExpenses);
+          .sort((a, b) => b.value - a.value);
+        setCategoryBreakdown(sortedCategories);
+        setTopExpenses(sortedCategories.slice(0, 5));
 
         const historyData: MonthlyData[] = monthNames.map((m) => ({
           monthLabel: m,
@@ -291,6 +307,18 @@ function AnalyticsPageContent() {
             : historyData;
 
         setMonthlyHistory(filteredHistory);
+
+        // Derived insights
+        setSavingsRate(totalIncome > 0 ? ((totalIncome - totalExpenses) / totalIncome) * 100 : 0);
+        setTransactionCount(transactions.length);
+        setAvgDailySpend(totalExpenses / (monthsCount * 30));
+        const activeHistory = filteredHistory.filter((m) => m.income > 0 || m.expenses > 0);
+        setBestMonth(
+          activeHistory.reduce<MonthlyData | null>(
+            (best, m) => (best === null || m.savings > best.savings ? m : best),
+            null,
+          ),
+        );
       } catch (err) {
         console.error("Chyba při výpočtu analytiky:", err);
       } finally {
@@ -317,9 +345,100 @@ function AnalyticsPageContent() {
           totalSavings={totalSavings}
           topExpenses={topExpenses}
           monthlyHistory={monthlyHistory}
+          savingsRate={savingsRate}
+          transactionCount={transactionCount}
+          categoryBreakdown={categoryBreakdown}
+          bestMonth={bestMonth}
+          avgDailySpend={avgDailySpend}
           currency={currency}
         />
       )}
+    </div>
+  );
+}
+
+const BAR_COLORS = [
+  "oklch(0.68 0.2 300)",
+  "oklch(0.60 0.22 270)",
+  "oklch(0.70 0.16 200)",
+  "oklch(0.72 0.16 150)",
+  "oklch(0.74 0.15 90)",
+  "oklch(0.72 0.15 50)",
+  "oklch(0.62 0.2 25)",
+  "oklch(0.50 0.06 255)",
+];
+
+function CategoryBars({
+  data,
+  currency,
+}: {
+  data: AggregatedExpense[];
+  currency: string;
+}) {
+  const total = data.reduce((s, d) => s + d.value, 0);
+  const max = Math.max(...data.map((d) => d.value), 1);
+
+  if (data.length === 0) {
+    return (
+      <p className="py-8 text-center text-[12px] text-muted-foreground">
+        Žádné výdaje pro toto období.
+      </p>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-3">
+      {data.slice(0, 8).map((d, i) => {
+        const pct = total > 0 ? (d.value / total) * 100 : 0;
+        return (
+          <div key={d.name} className="flex flex-col gap-1">
+            <div className="flex items-center justify-between text-[12px]">
+              <span className="flex items-center gap-2 text-foreground">
+                <span
+                  className="size-2.5 shrink-0 rounded-full"
+                  style={{ background: BAR_COLORS[i % BAR_COLORS.length] }}
+                />
+                {d.name}
+              </span>
+              <span className="tabular-nums text-muted-foreground">
+                {formatMoney(d.value, currency)} · {pct.toFixed(0)} %
+              </span>
+            </div>
+            <div className="h-2 overflow-hidden rounded-full bg-secondary/40">
+              <motion.div
+                className="h-full rounded-full"
+                style={{ background: BAR_COLORS[i % BAR_COLORS.length] }}
+                initial={{ width: 0 }}
+                animate={{ width: `${(d.value / max) * 100}%` }}
+                transition={{ duration: 0.7, delay: 0.05 * i, ease: [0.16, 1, 0.3, 1] }}
+              />
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function InsightTile({
+  icon: Icon,
+  label,
+  value,
+  sub,
+}: {
+  icon: typeof TrendingUp;
+  label: string;
+  value: string;
+  sub?: string;
+}) {
+  return (
+    <div className="flex flex-col gap-1 rounded-lg border border-border/60 bg-secondary/30 px-3 py-3 transition-colors hover:border-foreground/15 hover:bg-secondary/50">
+      <span className="flex items-center gap-1.5 text-[11px] uppercase tracking-wider text-muted-foreground">
+        <Icon className="size-3.5" />
+        {label}
+      </span>
+      <span className="text-[16px] font-semibold tabular-nums text-foreground">{value}</span>
+      {sub && <span className="text-[11px] text-muted-foreground">{sub}</span>}
     </div>
   );
 }
@@ -330,6 +449,11 @@ function AnalyticsContent({
   totalSavings,
   topExpenses,
   monthlyHistory,
+  savingsRate,
+  transactionCount,
+  categoryBreakdown,
+  bestMonth,
+  avgDailySpend,
   currency,
 }: {
   avgExpenses: number;
@@ -337,12 +461,17 @@ function AnalyticsContent({
   totalSavings: number;
   topExpenses: AggregatedExpense[];
   monthlyHistory: MonthlyData[];
+  savingsRate: number;
+  transactionCount: number;
+  categoryBreakdown: AggregatedExpense[];
+  bestMonth: MonthlyData | null;
+  avgDailySpend: number;
   currency: string;
 }) {
   return (
     <RevealGroup className="flex flex-col gap-6">
       {/* Hlavní metriky */}
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <RevealItem>
           <MetricCard
             label="Průměrné měsíční výdaje"
@@ -367,7 +496,49 @@ function AnalyticsContent({
             icon={PiggyBank}
           />
         </RevealItem>
+        <RevealItem>
+          <MetricCard
+            label="Míra úspor"
+            value={`${savingsRate.toFixed(1)} %`}
+            tone={savingsRate >= 0 ? "green" : "red"}
+            icon={Percent}
+          />
+        </RevealItem>
       </div>
+
+      {/* Poznatky */}
+      <RevealItem>
+        <Card className="px-4 py-5 sm:px-5">
+          <div className="mb-1 flex items-center gap-2">
+            <BarChart3 className="size-4 text-primary" />
+            <h2 className="text-[15px] font-semibold text-foreground">Poznatky</h2>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <InsightTile
+              icon={CalendarRange}
+              label="Nejúspornější měsíc"
+              value={bestMonth ? bestMonth.monthLabel : "—"}
+              sub={bestMonth ? formatMoney(bestMonth.savings, currency, { sign: "auto" }) : undefined}
+            />
+            <InsightTile
+              icon={Layers}
+              label="Největší kategorie"
+              value={topExpenses[0]?.name ?? "—"}
+              sub={topExpenses[0] ? formatMoney(topExpenses[0].value, currency) : undefined}
+            />
+            <InsightTile
+              icon={Receipt}
+              label="Průměrná denní útrata"
+              value={formatMoney(avgDailySpend, currency)}
+            />
+            <InsightTile
+              icon={Hash}
+              label="Počet transakcí"
+              value={String(transactionCount)}
+            />
+          </div>
+        </Card>
+      </RevealItem>
       <RevealItem>
         <Card className="gap-0 px-4 pb-3 pt-5 sm:px-5">
           <div className="mb-3 flex items-start justify-between">
@@ -396,6 +567,18 @@ function AnalyticsContent({
             </span>
           </div>
           <IncomeExpensesChart data={monthlyHistory} currency={currency} />
+        </Card>
+      </RevealItem>
+
+      <RevealItem>
+        <Card className="px-4 py-5 sm:px-5">
+          <div className="mb-4 flex items-center gap-2">
+            <Layers className="size-4 text-muted-foreground" />
+            <h2 className="text-[15px] font-semibold text-foreground">
+              Výdaje podle kategorií
+            </h2>
+          </div>
+          <CategoryBars data={categoryBreakdown} currency={currency} />
         </Card>
       </RevealItem>
 

@@ -8,6 +8,8 @@ import {
   FileText,
   HardDriveDownload,
   Loader2,
+  Sparkles,
+  Trash2,
   UploadCloud,
   UserCircle,
 } from "lucide-react";
@@ -32,7 +34,7 @@ const CURRENCIES = [
   { code: "USD", label: "Dolar ($)" },
 ];
 
-type SettingsModal = "import" | "export-csv" | "annual-report" | null;
+type SettingsModal = "import" | "export-csv" | "annual-report" | "clear-data" | null;
 
 interface FlatTx {
   date: string;
@@ -273,6 +275,17 @@ export default function SettingsPage() {
                   Roční report
                 </Button>
               </div>
+
+              <div className="mt-1 border-t border-border/50 pt-4">
+                <Button
+                  variant="destructive"
+                  className="h-10 w-full"
+                  onClick={() => setModal("clear-data")}
+                >
+                  <Trash2 className="size-4" />
+                  Vymazat všechny transakce
+                </Button>
+              </div>
             </Card>
           </RevealItem>
         </RevealGroup>
@@ -297,7 +310,81 @@ export default function SettingsPage() {
         onClose={() => setModal(null)}
         onCreated={() => success("Report vytvořen", "Souhrn byl stažen jako JSON.")}
       />
+      <ClearDataDialog
+        open={modal === "clear-data"}
+        onClose={() => setModal(null)}
+        onCleared={(count) =>
+          success("Data vymazána", `Odstraněno ${count} transakcí.`)
+        }
+      />
     </div>
+  );
+}
+
+// ─── Clear data ──────────────────────────────────────────────────────────────────
+function ClearDataDialog({
+  open,
+  onClose,
+  onCleared,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onCleared: (count: number) => void;
+}) {
+  const { error: errorToast } = useToast();
+  const [busy, setBusy] = useState(false);
+
+  async function clearAll() {
+    setBusy(true);
+    try {
+      const supabase = createClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) {
+        errorToast("Nejste přihlášeni", "Pro vymazání dat se přihlaste.");
+        setBusy(false);
+        return;
+      }
+
+      const { count } = await supabase
+        .from("transactions")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", user.id);
+
+      const { error } = await supabase
+        .from("transactions")
+        .delete()
+        .eq("user_id", user.id);
+      if (error) throw error;
+
+      window.dispatchEvent(new CustomEvent("koin-profile-change"));
+      onCleared(count ?? 0);
+      onClose();
+    } catch (err) {
+      errorToast("Chyba", err instanceof Error ? err.message : "Vymazání se nezdařilo.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Modal
+      open={open}
+      title="Vymazat všechny transakce"
+      description="Trvale odstraní všechny vaše transakce. Kategorie a profil zůstanou zachovány. Tuto akci nelze vrátit zpět."
+      onClose={onClose}
+    >
+      <div className="flex justify-end gap-2">
+        <Button type="button" variant="outline" onClick={onClose} disabled={busy}>
+          Zrušit
+        </Button>
+        <Button type="button" variant="destructive" onClick={clearAll} disabled={busy}>
+          {busy ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
+          Vymazat vše
+        </Button>
+      </div>
+    </Modal>
   );
 }
 
@@ -328,6 +415,8 @@ function ImportDialog({
   });
   const [dragging, setDragging] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [phase, setPhase] = useState<"idle" | "categorizing" | "saving">("idle");
+  const [aiCategorize, setAiCategorize] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -337,6 +426,7 @@ function ImportDialog({
     setError(null);
     setDragging(false);
     setBusy(false);
+    setPhase("idle");
   }
 
   function close() {
@@ -413,15 +503,53 @@ function ImportDialog({
         return;
       }
 
-      const payload = rows.map((r) => ({
-        name: r.name,
-        date: r.date,
-        amount: r.amount,
-        currency: currency || "CZK",
-        user_id: user.id,
-        transaction_type: r.type,
-        category_id: null,
-      }));
+      // Load the user's categories so AI can map into real category_ids.
+      const { data: cats } = await supabase
+        .from("categories")
+        .select("id, name")
+        .eq("user_id", user.id);
+      const catList = (cats ?? []) as { id: number | string; name: string }[];
+      const nameToId = new Map(catList.map((c) => [c.name, c.id]));
+
+      // AI category recognition (best-effort; may propose brand-new categories).
+      let assigned: string[] = [];
+      if (aiCategorize) {
+        setPhase("categorizing");
+        assigned = await classifyAll(
+          rows.map((r) => r.name),
+          catList.map((c) => c.name)
+        );
+
+        // Create any categories the AI suggested that don't exist yet.
+        const newNames = [
+          ...new Set(
+            assigned.filter((n) => n && n !== "Bez kategorie" && !nameToId.has(n))
+          ),
+        ];
+        if (newNames.length > 0) {
+          const { data: created } = await supabase
+            .from("categories")
+            .insert(newNames.map((name) => ({ name, user_id: user.id })))
+            .select("id, name");
+          for (const c of (created ?? []) as { id: number | string; name: string }[]) {
+            nameToId.set(c.name, c.id);
+          }
+        }
+      }
+
+      setPhase("saving");
+      const payload = rows.map((r, i) => {
+        const catName = assigned[i];
+        return {
+          name: r.name,
+          date: r.date,
+          amount: r.amount,
+          currency: currency || "CZK",
+          user_id: user.id,
+          transaction_type: r.type,
+          category_id: catName && nameToId.has(catName) ? nameToId.get(catName)! : null,
+        };
+      });
 
       const { error: insertError } = await supabase.from("transactions").insert(payload);
       if (insertError) throw insertError;
@@ -431,7 +559,34 @@ function ImportDialog({
     } catch (err) {
       setError(err instanceof Error ? err.message : "Import se nezdařil.");
       setBusy(false);
+      setPhase("idle");
     }
+  }
+
+  // Classify descriptions into the given categories via the AI route, in batches.
+  async function classifyAll(items: string[], categories: string[]): Promise<string[]> {
+    const out: string[] = [];
+    const BATCH = 40;
+    for (let i = 0; i < items.length; i += BATCH) {
+      const batch = items.slice(i, i + BATCH);
+      try {
+        const res = await fetch("/api/categorize", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ items: batch, categories }),
+        });
+        if (res.ok) {
+          const json = await res.json();
+          const r: string[] = Array.isArray(json?.result) ? json.result : [];
+          for (let k = 0; k < batch.length; k++) out.push(r[k] ?? "Bez kategorie");
+        } else {
+          batch.forEach(() => out.push("Bez kategorie"));
+        }
+      } catch {
+        batch.forEach(() => out.push("Bez kategorie"));
+      }
+    }
+    return out;
   }
 
   return (
@@ -547,6 +702,19 @@ function ImportDialog({
               </table>
             </div>
 
+            {/* AI categorization toggle */}
+            <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-border/70 bg-secondary/20 px-3 py-2.5 text-[12px]">
+              <input
+                type="checkbox"
+                checked={aiCategorize}
+                onChange={(e) => setAiCategorize(e.target.checked)}
+                disabled={busy}
+                className="size-4 accent-primary"
+              />
+              <Sparkles className="size-3.5 text-primary" />
+              <span className="text-foreground">Rozpoznat kategorie pomocí AI</span>
+            </label>
+
             {error && <p className="text-[12px] text-red-400">{error}</p>}
 
             <div className="flex justify-between gap-2 pt-1">
@@ -555,7 +723,11 @@ function ImportDialog({
               </Button>
               <Button type="button" onClick={confirmImport} disabled={busy}>
                 {busy ? <Loader2 className="size-4 animate-spin" /> : <CheckCircle2 className="size-4" />}
-                Importovat {parsed.rows.length}
+                {phase === "categorizing"
+                  ? "AI rozpoznává…"
+                  : phase === "saving"
+                    ? "Ukládám…"
+                    : `Importovat ${parsed.rows.length}`}
               </Button>
             </div>
           </motion.div>
