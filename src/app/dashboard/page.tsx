@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ShoppingCart,
   Banknote,
@@ -38,6 +38,8 @@ import { IncomeExpensesChart } from "@/components/dashboard/income-expenses-char
 import { CategoryDonut } from "@/components/dashboard/category-donut";
 import { Skeleton } from "@/components/ui/skeleton";
 import { createClient } from "@/lib/supabase/client";
+import { formatMoney, normalizeTransactionAmount } from "@/lib/money";
+import { useProfileCurrency } from "@/lib/use-profile-currency";
 
 // ─── Stat card ────────────────────────────────────────────────────────────────
 type Accent = "emerald" | "red" | "indigo" | "violet";
@@ -77,6 +79,7 @@ function StatCard({
   accent,
   icon: Icon,
   delay = 0,
+  currency,
 }: {
   label: string;
   value: number;
@@ -86,22 +89,17 @@ function StatCard({
   accent: Accent;
   icon: React.ComponentType<{ className?: string }>;
   delay?: number;
+  currency: string;
 }) {
   const a = ACCENT[accent];
   const ArrowIcon = badgeDirection === "down" ? ArrowDownRight : ArrowUpRight;
   return (
-    <Card
-      className={cn(
-        "group/stat gap-3 px-5 py-5",
-        DASHBOARD_CARD,
-        a.ring
-      )}
-    >
+    <Card className={cn("group/stat gap-3 px-5 py-5", DASHBOARD_CARD, a.ring)}>
       {/* corner glow */}
       <span
         className={cn(
           "pointer-events-none absolute -right-8 -top-10 size-28 rounded-full blur-2xl opacity-60 transition-opacity duration-500 group-hover/stat:opacity-100",
-          a.glow
+          a.glow,
         )}
       />
       {/* hover sheen */}
@@ -112,7 +110,10 @@ function StatCard({
           {label}
         </p>
         <motion.span
-          className={cn("flex size-8 items-center justify-center rounded-lg", a.tile)}
+          className={cn(
+            "flex size-8 items-center justify-center rounded-lg",
+            a.tile,
+          )}
           whileHover={{ scale: 1.1, rotate: -6 }}
           transition={{ type: "spring", stiffness: 500, damping: 18 }}
         >
@@ -123,12 +124,12 @@ function StatCard({
       <CountUp
         value={value}
         delay={delay}
-        format={(n) => `€${Math.round(n).toLocaleString("cs")}`}
+        format={(n) => formatMoney(n, currency)}
         className={cn(
           "text-[30px] font-bold leading-none tabular-nums tracking-tight",
           valueColor === "green" && "text-emerald-400",
-          valueColor === "red"   && "text-red-400",
-          !valueColor             && "text-foreground"
+          valueColor === "red" && "text-red-400",
+          !valueColor && "text-foreground",
         )}
       />
 
@@ -139,7 +140,7 @@ function StatCard({
             ? "bg-red-500/12 text-red-400"
             : badgeDirection === "up"
               ? "bg-emerald-500/12 text-emerald-400"
-              : "bg-indigo-500/12 text-indigo-400"
+              : "bg-indigo-500/12 text-indigo-400",
         )}
       >
         {badgeDirection !== "flat" && <ArrowIcon className="size-3" />}
@@ -159,23 +160,38 @@ type CleanTransaction = {
   iconBg: string;
 };
 
-type MonthlyData = { monthLabel: string; income: number; expenses: number; savings: number };
+type MonthlyData = {
+  monthLabel: string;
+  income: number;
+  expenses: number;
+  savings: number;
+};
 
 function getCategoryIcon(categoryName: string) {
   const name = categoryName.toLowerCase();
-  if (name.includes("jídlo") || name.includes("lidl")) return { icon: ShoppingCart, bg: "bg-orange-500/10 text-orange-400" };
-  if (name.includes("příjem") || name.includes("výplata")) return { icon: Banknote, bg: "bg-emerald-500/10 text-emerald-400" };
-  if (name.includes("zábava") || name.includes("netflix")) return { icon: Tv2, bg: "bg-purple-500/10 text-purple-400" };
-  if (name.includes("bydlení") || name.includes("nájem")) return { icon: Home, bg: "bg-blue-500/10 text-blue-400" };
+  if (name.includes("jídlo") || name.includes("lidl"))
+    return { icon: ShoppingCart, bg: "bg-orange-500/10 text-orange-400" };
+  if (name.includes("příjem") || name.includes("výplata"))
+    return { icon: Banknote, bg: "bg-emerald-500/10 text-emerald-400" };
+  if (name.includes("zábava") || name.includes("netflix"))
+    return { icon: Tv2, bg: "bg-purple-500/10 text-purple-400" };
+  if (name.includes("bydlení") || name.includes("nájem"))
+    return { icon: Home, bg: "bg-blue-500/10 text-blue-400" };
   return { icon: HelpCircle, bg: "bg-slate-500/10 text-slate-400" };
 }
 
 function getCategoryName(categories: unknown) {
   if (Array.isArray(categories)) {
     const first = categories[0];
-    return typeof first === "object" && first !== null && "name" in first ? String(first.name) : "Bez kategorie";
+    return typeof first === "object" && first !== null && "name" in first
+      ? String(first.name)
+      : "Bez kategorie";
   }
-  return typeof categories === "object" && categories !== null && "name" in categories ? String(categories.name) : "Bez kategorie";
+  return typeof categories === "object" &&
+    categories !== null &&
+    "name" in categories
+    ? String(categories.name)
+    : "Bez kategorie";
 }
 
 // ─── Widget model ───────────────────────────────────────────────────────────────
@@ -204,131 +220,183 @@ const DEFAULT_WIDGETS: WidgetState[] = [
 
 const STORAGE_KEY = "dashboard-widgets-v1";
 const COMPACT_KEY = "dashboard-compact-v1";
-
 type DashboardModal = "transaction" | null;
+type DbCategory = { id: number | string; name: string };
 
-function fmt(n: number) {
-  const abs = Math.abs(n).toLocaleString("cs", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  return `€${abs}`;
+function fmt(n: number, currency: string) {
+  return formatMoney(n, currency, { sign: "auto" });
 }
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 export default function DashboardPage() {
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
+  const currency = useProfileCurrency();
 
-  const [loading, setLoading] = useState(true);
+  const [layoutReady, setLayoutReady] = useState(false);
+  const [dataReady, setDataReady] = useState(false);
   const [modal, setModal] = useState<DashboardModal>(null);
   const [editing, setEditing] = useState(false);
   const [compactLayout, setCompactLayout] = useState(false);
   const [widgets, setWidgets] = useState<WidgetState[]>(DEFAULT_WIDGETS);
 
-  const [stats, setStats] = useState({ balance: 0, income: 0, expenses: 0, savings: 0 });
+  const [stats, setStats] = useState({
+    balance: 0,
+    income: 0,
+    expenses: 0,
+    savings: 0,
+  });
   const [transactions, setTransactions] = useState<CleanTransaction[]>([]);
   const [chartData, setChartData] = useState<MonthlyData[]>([]);
+  const [categories, setCategories] = useState<DbCategory[]>([]);
 
   const [donutType, setDonutType] = useState<"income" | "expense">("expense");
 
   const hydrated = useRef(false);
 
-  useEffect(() => {
-    async function fetchDashboardData() {
-      try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return;
+  const loading = !layoutReady || !dataReady;
 
-        const currentYear = 2026; 
-        const startDate = `${currentYear}-01-01`;
-        const endDate = `${currentYear}-12-31`;
+  const refreshDashboardData = useCallback(async () => {
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) {
+        setDataReady(true);
+        return;
+      }
 
-        const { data: dbTransactions, error } = await supabase
+      const currentYear = new Date().getFullYear();
+      const startDate = `${currentYear}-01-01`;
+      const endDate = `${currentYear}-12-31`;
+
+      const [
+        { data: dbTransactions, error },
+        { data: dbCategories, error: categoriesError },
+      ] = await Promise.all([
+        supabase
           .from("transactions")
-          .select(`
-            amount,
+          .select(
+            `
+	            amount,
             transaction_type,
             date,
             name,
             categories ( name )
-          `)
+          `,
+          )
           .eq("user_id", user.id)
           .gte("date", startDate)
           .lte("date", endDate)
-          .order("date", { ascending: false });
+          .order("date", { ascending: false }),
+        supabase
+          .from("categories")
+          .select("id, name")
+          .eq("user_id", user.id)
+          .order("name", { ascending: true }),
+      ]);
 
-        if (error) throw error;
+      if (error) throw error;
+      if (categoriesError) throw categoriesError;
+      setCategories((dbCategories || []) as DbCategory[]);
 
-        if (!dbTransactions || dbTransactions.length === 0) {
-          setLoading(false);
-          return;
-        }
-
-        const freshTransactions: CleanTransaction[] = dbTransactions.map((tx) => {
-          const catName = getCategoryName(tx.categories);
-          const iconMeta = getCategoryIcon(catName || tx.name);
-          const formattedDate = new Date(tx.date).toLocaleDateString("cs-CZ", {
-            day: "numeric",
-            month: "short",
-          });
-
-          return {
-            name: tx.name || "Transakce",
-            category: catName,
-            time: formattedDate,
-            amount: tx.transaction_type === "expense" ? -Math.abs(tx.amount) : Math.abs(tx.amount),
-            icon: iconMeta.icon,
-            iconBg: iconMeta.bg,
-          };
-        });
-        setTransactions(freshTransactions);
-
-        const monthlyMap: Record<string, { income: number; expenses: number }> = {};
-        const monthNames = ["Jan", "Feb", "Mar", "Apr", "Maj", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dec"];
-        
-        monthNames.forEach((m) => {
-          monthlyMap[m] = { income: 0, expenses: 0 };
-        });
-
-        let totalIncome = 0;
-        let totalExpenses = 0;
-
-        dbTransactions.forEach((tx) => {
-          const amount = Math.abs(tx.amount);
-          const dateObj = new Date(tx.date);
-          const monthLabel = monthNames[dateObj.getMonth()];
-
-          if (tx.transaction_type === "income") {
-            totalIncome += amount;
-            monthlyMap[monthLabel].income += amount;
-          } else if (tx.transaction_type === "expense") {
-            totalExpenses += amount;
-            monthlyMap[monthLabel].expenses += amount;
-          }
-        });
-
-        setStats({
-          balance: totalIncome - totalExpenses,
-          income: totalIncome,
-          expenses: totalExpenses,
-          savings: totalIncome - totalExpenses,
-        });
-
-        const historyData: MonthlyData[] = monthNames.map((m) => ({
-          monthLabel: m,
-          income: monthlyMap[m].income,
-          expenses: monthlyMap[m].expenses,
-          savings: monthlyMap[m].income - monthlyMap[m].expenses,
-        }));
-
-        const currentMonthIdx = new Date().getMonth(); 
-
-        setChartData(historyData.slice(0, currentMonthIdx + 1));
-
-      } catch (err) {
-        console.error("Chyba při stahování dat pro dashboard:", err);
+      if (!dbTransactions || dbTransactions.length === 0) {
+        setTransactions([]);
+        setStats({ balance: 0, income: 0, expenses: 0, savings: 0 });
+        setChartData([]);
+        return;
       }
-    }
 
-    fetchDashboardData();
+      const freshTransactions: CleanTransaction[] = dbTransactions.map((tx) => {
+        const catName = getCategoryName(tx.categories);
+        const iconMeta = getCategoryIcon(catName || tx.name);
+        const formattedDate = new Date(tx.date).toLocaleDateString("cs-CZ", {
+          day: "numeric",
+          month: "short",
+        });
+
+        return {
+          name: tx.name || "Transakce",
+          category: catName,
+          time: formattedDate,
+          amount:
+            tx.transaction_type === "expense"
+              ? -Math.abs(tx.amount)
+              : Math.abs(tx.amount),
+          icon: iconMeta.icon,
+          iconBg: iconMeta.bg,
+        };
+      });
+      setTransactions(freshTransactions);
+
+      const monthlyMap: Record<string, { income: number; expenses: number }> =
+        {};
+      const monthNames = [
+        "Jan",
+        "Feb",
+        "Mar",
+        "Apr",
+        "Maj",
+        "Jun",
+        "Jul",
+        "Aug",
+        "Sep",
+        "Okt",
+        "Nov",
+        "Dec",
+      ];
+
+      monthNames.forEach((m) => {
+        monthlyMap[m] = { income: 0, expenses: 0 };
+      });
+
+      let totalIncome = 0;
+      let totalExpenses = 0;
+
+      dbTransactions.forEach((tx) => {
+        const amount = Math.abs(tx.amount);
+        const dateObj = new Date(tx.date);
+        const monthLabel = monthNames[dateObj.getMonth()];
+
+        if (tx.transaction_type === "income") {
+          totalIncome += amount;
+          monthlyMap[monthLabel].income += amount;
+        } else if (tx.transaction_type === "expense") {
+          totalExpenses += amount;
+          monthlyMap[monthLabel].expenses += amount;
+        }
+      });
+
+      setStats({
+        balance: totalIncome - totalExpenses,
+        income: totalIncome,
+        expenses: totalExpenses,
+        savings: totalIncome - totalExpenses,
+      });
+
+      const historyData: MonthlyData[] = monthNames.map((m) => ({
+        monthLabel: m,
+        income: monthlyMap[m].income,
+        expenses: monthlyMap[m].expenses,
+        savings: monthlyMap[m].income - monthlyMap[m].expenses,
+      }));
+
+      const currentMonthIdx = new Date().getMonth();
+
+      setChartData(historyData.slice(0, currentMonthIdx + 1));
+    } catch (err) {
+      console.error("Chyba při stahování dat pro dashboard:", err);
+    } finally {
+      setDataReady(true);
+    }
   }, [supabase]);
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      void refreshDashboardData();
+    }, 0);
+
+    return () => window.clearTimeout(timeout);
+  }, [refreshDashboardData]);
 
   // Hydrate persisted layout, then reveal (runs once, after mount)
   useEffect(() => {
@@ -339,7 +407,9 @@ export default function DashboardPage() {
           const parsed = JSON.parse(raw) as WidgetState[];
           // Keep only known ids, and append any missing defaults
           const known = parsed.filter((w) => w.id in WIDGET_TITLES);
-          const missing = DEFAULT_WIDGETS.filter((d) => !known.some((w) => w.id === d.id));
+          const missing = DEFAULT_WIDGETS.filter(
+            (d) => !known.some((w) => w.id === d.id),
+          );
           setWidgets([...known, ...missing]);
         }
         setCompactLayout(localStorage.getItem(COMPACT_KEY) === "1");
@@ -347,7 +417,7 @@ export default function DashboardPage() {
         /* ignore malformed storage */
       }
       hydrated.current = true;
-      setLoading(false);
+      setLayoutReady(true);
     }, 550);
     return () => window.clearTimeout(timeout);
   }, []);
@@ -374,11 +444,15 @@ export default function DashboardPage() {
     success("Rozložení uloženo");
   }
   function setVisible(id: WidgetId, value: boolean) {
-    setWidgets((prev) => prev.map((w) => (w.id === id ? { ...w, visible: value } : w)));
+    setWidgets((prev) =>
+      prev.map((w) => (w.id === id ? { ...w, visible: value } : w)),
+    );
   }
   function toggleSize(id: WidgetId) {
     setWidgets((prev) =>
-      prev.map((w) => (w.id === id ? { ...w, size: w.size === "lg" ? "sm" : "lg" } : w))
+      prev.map((w) =>
+        w.id === id ? { ...w, size: w.size === "lg" ? "sm" : "lg" } : w,
+      ),
     );
   }
   function resetLayout() {
@@ -431,11 +505,21 @@ export default function DashboardPage() {
                 exit={{ opacity: 0, x: -8 }}
                 transition={{ duration: 0.15 }}
               >
-                <Button variant="outline" size="sm" className="h-9" onClick={() => setEditing(true)}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-9"
+                  onClick={() => setEditing(true)}
+                >
                   <Settings2 className="size-3.5" />
                   Upravit widgety
                 </Button>
-                <Button variant="secondary" size="sm" className="h-9" onClick={() => setModal("transaction")}>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className="h-9"
+                  onClick={() => setModal("transaction")}
+                >
                   <Plus className="size-3.5" />
                   Přidat transakci
                 </Button>
@@ -458,7 +542,8 @@ export default function DashboardPage() {
             <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-dashed border-border bg-secondary/30 px-4 py-3">
               <p className="flex items-center gap-2 text-[13px] text-muted-foreground">
                 <GripVertical className="size-4" />
-                Přetáhni widgety pro změnu pořadí · měň velikost · skryj nepotřebné
+                Přetáhni widgety pro změnu pořadí · měň velikost · skryj
+                nepotřebné
               </p>
               <label className="flex cursor-pointer items-center gap-2 text-[13px] text-foreground">
                 Kompaktní rozestupy
@@ -477,7 +562,12 @@ export default function DashboardPage() {
       {loading ? (
         <DashboardSkeleton />
       ) : (
-        <div className={cn("rounded-xl transition-all duration-300", editing && "widget-canvas p-3 sm:p-4")}>
+        <div
+          className={cn(
+            "rounded-xl transition-all duration-300",
+            editing && "widget-canvas p-3 sm:p-4",
+          )}
+        >
           <Reorder.Group
             axis="y"
             values={visible}
@@ -493,13 +583,14 @@ export default function DashboardPage() {
                 onToggleSize={() => toggleSize(widget.id)}
                 onHide={() => setVisible(widget.id, false)}
               >
-                <WidgetContent 
-                  id={widget.id} 
-                  stats={stats} 
-                  transactions={transactions} 
+                <WidgetContent
+                  id={widget.id}
+                  stats={stats}
+                  transactions={transactions}
                   chartData={chartData}
                   donutType={donutType}
                   setDonutType={setDonutType}
+                  currency={currency}
                 />
               </WidgetFrame>
             ))}
@@ -514,7 +605,9 @@ export default function DashboardPage() {
                 exit={{ opacity: 0, y: 8 }}
                 className="mt-4 flex flex-wrap items-center gap-2 border-t border-dashed border-border pt-4"
               >
-                <span className="text-[12px] text-muted-foreground">Skryté:</span>
+                <span className="text-[12px] text-muted-foreground">
+                  Skryté:
+                </span>
                 {hidden.map((w) => (
                   <button
                     key={w.id}
@@ -531,7 +624,13 @@ export default function DashboardPage() {
         </div>
       )}
 
-      <DashboardDialogs modal={modal} onClose={() => setModal(null)} />
+      <DashboardDialogs
+        modal={modal}
+        categories={categories}
+        currency={currency}
+        onCreated={refreshDashboardData}
+        onClose={() => setModal(null)}
+      />
     </div>
   );
 }
@@ -564,7 +663,11 @@ function WidgetFrame({
       className={cn("relative", sizeClass)}
       initial={{ opacity: 0, filter: "blur(6px)" }}
       animate={{ opacity: 1, filter: "blur(0px)" }}
-      transition={{ duration: 0.4, delay: index * 0.05, layout: { type: "spring", stiffness: 450, damping: 38 } }}
+      transition={{
+        duration: 0.4,
+        delay: index * 0.05,
+        layout: { type: "spring", stiffness: 450, damping: 38 },
+      }}
       whileHover={editing ? undefined : { y: -3 }}
       whileDrag={{ scale: 1.03, zIndex: 50, cursor: "grabbing" }}
       style={{ cursor: editing ? "grab" : "default" }}
@@ -574,7 +677,14 @@ function WidgetFrame({
         animate={editing ? { rotate: [-0.35, 0.35] } : { rotate: 0 }}
         transition={
           editing
-            ? { rotate: { duration: 0.24, repeat: Infinity, repeatType: "mirror", delay: index * 0.05 } }
+            ? {
+                rotate: {
+                  duration: 0.24,
+                  repeat: Infinity,
+                  repeatType: "mirror",
+                  delay: index * 0.05,
+                },
+              }
             : { duration: 0.2 }
         }
       >
@@ -603,7 +713,11 @@ function WidgetFrame({
                   title={widget.size === "lg" ? "Zmenšit" : "Roztáhnout"}
                   className="flex size-7 items-center justify-center rounded-lg bg-card/90 text-muted-foreground ring-1 ring-border backdrop-blur transition-colors hover:text-foreground"
                 >
-                  {widget.size === "lg" ? <Minimize2 className="size-3.5" /> : <Maximize2 className="size-3.5" />}
+                  {widget.size === "lg" ? (
+                    <Minimize2 className="size-3.5" />
+                  ) : (
+                    <Maximize2 className="size-3.5" />
+                  )}
                 </button>
                 <button
                   onClick={onHide}
@@ -617,7 +731,12 @@ function WidgetFrame({
           )}
         </AnimatePresence>
 
-        <div className={cn("h-full transition-opacity", editing && "pointer-events-none select-none")}>
+        <div
+          className={cn(
+            "h-full transition-opacity",
+            editing && "pointer-events-none select-none",
+          )}
+        >
           {children}
         </div>
       </motion.div>
@@ -626,29 +745,69 @@ function WidgetFrame({
 }
 
 // ─── Widget content ─────────────────────────────────────────────────────────────
-function WidgetContent({ 
-  id, 
-  stats, 
-  transactions, 
+function WidgetContent({
+  id,
+  stats,
+  transactions,
   chartData,
   donutType,
-  setDonutType
-}: { 
+  setDonutType,
+  currency,
+}: {
   id: WidgetId;
   stats: { balance: number; income: number; expenses: number; savings: number };
   transactions: CleanTransaction[];
   chartData: MonthlyData[];
   donutType: "income" | "expense";
   setDonutType: (t: "income" | "expense") => void;
+  currency: string;
 }) {
   switch (id) {
     case "stats":
       return (
         <div className="grid h-full gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <StatCard label="Zůstatek" value={stats.balance} icon={Wallet} accent="violet" badge="€320 oproti prosinci" badgeDirection="up" delay={0} />
-          <StatCard label="Příjmy" value={stats.income} valueColor="green" icon={TrendingUp} accent="emerald" badge="12.5% MoM" badgeDirection="up" delay={0.08} />
-          <StatCard label="Výdaje" value={stats.expenses} valueColor="red" icon={TrendingDown} accent="red" badge="8.2% MoM" badgeDirection="down" delay={0.16} />
-          <StatCard label="Úspory" value={stats.savings} icon={PiggyBank} accent="indigo" badge="45.6% z příjmů" badgeDirection="flat" delay={0.24} />
+          <StatCard
+            label="Zůstatek"
+            value={stats.balance}
+            icon={Wallet}
+            accent="violet"
+            badge={`${formatMoney(320, currency)} oproti prosinci`}
+            badgeDirection="up"
+            delay={0}
+            currency={currency}
+          />
+          <StatCard
+            label="Příjmy"
+            value={stats.income}
+            valueColor="green"
+            icon={TrendingUp}
+            accent="emerald"
+            badge="12.5% MoM"
+            badgeDirection="up"
+            delay={0.08}
+            currency={currency}
+          />
+          <StatCard
+            label="Výdaje"
+            value={stats.expenses}
+            valueColor="red"
+            icon={TrendingDown}
+            accent="red"
+            badge="8.2% MoM"
+            badgeDirection="down"
+            delay={0.16}
+            currency={currency}
+          />
+          <StatCard
+            label="Úspory"
+            value={stats.savings}
+            icon={PiggyBank}
+            accent="indigo"
+            badge="45.6% z příjmů"
+            badgeDirection="flat"
+            delay={0.24}
+            currency={currency}
+          />
         </div>
       );
 
@@ -662,31 +821,45 @@ function WidgetContent({
                 <TrendingUp className="size-4.5" />
               </span>
               <div>
-                <h2 className="text-[15px] font-semibold text-foreground">Příjmy vs Výdaje</h2>
-                <p className="text-[12px] text-muted-foreground">Posledních 6 měsíců</p>
+                <h2 className="text-[15px] font-semibold text-foreground">
+                  Příjmy vs Výdaje
+                </h2>
+                <p className="text-[12px] text-muted-foreground">
+                  Posledních 6 měsíců
+                </p>
               </div>
             </div>
-            <span className={cn(
-              "rounded-full border px-3 py-1 text-[12px] font-medium",
-              stats.savings >= 0 
-                ? "border-emerald-400/20 bg-emerald-500/10 text-emerald-300"
-                : "border-red-400/20 bg-red-500/10 text-red-300"
-            )}>
-              {stats.savings >= 0 ? `€${stats.savings.toLocaleString()} úspora` : `€${Math.abs(stats.savings).toLocaleString()} v mínusu`}
+            <span
+              className={cn(
+                "rounded-full border px-3 py-1 text-[12px] font-medium",
+                stats.savings >= 0
+                  ? "border-emerald-400/20 bg-emerald-500/10 text-emerald-300"
+                  : "border-red-400/20 bg-red-500/10 text-red-300",
+              )}
+            >
+              {stats.savings >= 0
+                ? `${formatMoney(stats.savings, currency)} úspora`
+                : `${formatMoney(Math.abs(stats.savings), currency)} v mínusu`}
             </span>
           </div>
           {/* legend */}
           <div className="mb-1 flex items-center gap-4 pl-1 text-[11px] text-muted-foreground">
             <span className="flex items-center gap-1.5">
-              <span className="size-2 rounded-full" style={{ background: "oklch(0.75 0.15 145)" }} />
+              <span
+                className="size-2 rounded-full"
+                style={{ background: "oklch(0.75 0.15 145)" }}
+              />
               Příjmy
             </span>
             <span className="flex items-center gap-1.5">
-              <span className="size-2 rounded-full" style={{ background: "oklch(0.65 0.18 200)" }} />
+              <span
+                className="size-2 rounded-full"
+                style={{ background: "oklch(0.65 0.18 200)" }}
+              />
               Výdaje
             </span>
           </div>
-          <IncomeExpensesChart data={chartData} />
+          <IncomeExpensesChart data={chartData} currency={currency} />
         </Card>
       );
 
@@ -694,27 +867,29 @@ function WidgetContent({
       return (
         <Card className={cn("h-full gap-4 px-5 py-5", DASHBOARD_CARD)}>
           <div className="flex items-center justify-between">
-            <h2 className="text-[15px] font-semibold text-foreground">Kategorie</h2>
-            
+            <h2 className="text-[15px] font-semibold text-foreground">
+              Kategorie
+            </h2>
+
             <div className="flex items-center rounded-lg bg-secondary/50 p-0.5 text-[12px]">
-              <button 
-                onClick={() => setDonutType("income")} 
+              <button
+                onClick={() => setDonutType("income")}
                 className={cn(
-                  "rounded-md px-2.5 py-1 transition-colors", 
-                  donutType === "income" 
-                    ? "bg-card font-medium text-foreground shadow-sm" 
-                    : "text-muted-foreground hover:text-foreground"
+                  "rounded-md px-2.5 py-1 transition-colors",
+                  donutType === "income"
+                    ? "bg-card font-medium text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground",
                 )}
               >
                 Příjmy
               </button>
-              <button 
-                onClick={() => setDonutType("expense")} 
+              <button
+                onClick={() => setDonutType("expense")}
                 className={cn(
-                  "rounded-md px-2.5 py-1 transition-colors", 
-                  donutType === "expense" 
-                    ? "bg-card font-medium text-foreground shadow-sm" 
-                    : "text-muted-foreground hover:text-foreground"
+                  "rounded-md px-2.5 py-1 transition-colors",
+                  donutType === "expense"
+                    ? "bg-card font-medium text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground",
                 )}
               >
                 Výdaje
@@ -730,7 +905,9 @@ function WidgetContent({
       return (
         <Card className={cn("h-full gap-3 px-5 py-5", DASHBOARD_CARD)}>
           <div className="flex items-center justify-between">
-            <h2 className="text-[15px] font-semibold text-foreground">Poslední transakce</h2>
+            <h2 className="text-[15px] font-semibold text-foreground">
+              Poslední transakce
+            </h2>
             <span className="rounded-full bg-secondary/60 px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
               {transactions.length} celkem
             </span>
@@ -742,28 +919,47 @@ function WidgetContent({
                 className="group/tx -mx-2 flex items-center gap-3 rounded-lg px-2 py-2.5 transition-colors hover:bg-secondary/50"
                 initial={{ opacity: 0, x: -8 }}
                 animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 0.18 + index * 0.04, type: "spring", stiffness: 450, damping: 32 }}
+                transition={{
+                  delay: 0.18 + index * 0.04,
+                  type: "spring",
+                  stiffness: 450,
+                  damping: 32,
+                }}
               >
-                <motion.span className={cn("flex size-9 shrink-0 items-center justify-center rounded-xl", tx.iconBg)}>
+                <motion.span
+                  className={cn(
+                    "flex size-9 shrink-0 items-center justify-center rounded-xl",
+                    tx.iconBg,
+                  )}
+                >
                   <tx.icon className="size-4" />
                 </motion.span>
                 <div className="flex min-w-0 flex-1 flex-col">
-                  <span className="text-[13px] font-medium text-foreground">{tx.name}</span>
+                  <span className="text-[13px] font-medium text-foreground">
+                    {tx.name}
+                  </span>
                   <span className="text-[11px] text-muted-foreground">
                     {tx.category} · {tx.time}
                   </span>
                 </div>
-                <span className={cn("shrink-0 text-[13px] font-semibold tabular-nums", tx.amount > 0 ? "text-emerald-400" : "text-foreground")}>
-                  {tx.amount > 0 ? "+" : ""}{fmt(tx.amount)}
+                <span
+                  className={cn(
+                    "shrink-0 text-[13px] font-semibold tabular-nums",
+                    tx.amount > 0 ? "text-emerald-400" : "text-red-400",
+                  )}
+                >
+                  {fmt(tx.amount, currency)}
                 </span>
               </motion.li>
             ))}
             {transactions.length === 0 && (
-              <p className="text-xs text-muted-foreground text-center py-6">Žádné transakce nenalezeny.</p>
+              <p className="text-xs text-muted-foreground text-center py-6">
+                Žádné transakce nenalezeny.
+              </p>
             )}
           </ul>
-          <Link 
-            href="/transactions" 
+          <Link
+            href="/transactions"
             className="mt-1 block text-center text-[12px] text-muted-foreground transition-colors hover:text-foreground"
           >
             Zobrazit všechny transakce →
@@ -792,17 +988,69 @@ function DashboardSkeleton() {
 
 function DashboardDialogs({
   modal,
+  categories,
+  currency,
+  onCreated,
   onClose,
 }: {
   modal: DashboardModal;
+  categories: DbCategory[];
+  currency: string;
+  onCreated: () => Promise<void>;
   onClose: () => void;
 }) {
-  const { success } = useToast();
+  const supabase = createClient();
+  const { success, error: errorToast } = useToast();
+  const [submitting, setSubmitting] = useState(false);
 
-  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    success("Transakce přidána");
-    onClose();
+    setSubmitting(true);
+
+    try {
+      const formData = new FormData(e.currentTarget);
+      const name = String(formData.get("name") || "").trim();
+      const date = String(formData.get("date") || "");
+      const rawAmount = Number(formData.get("amount"));
+      const transactionType = formData.get("transaction_type") as
+        | "income"
+        | "expense";
+      const categoryId = formData.get("category_id")
+        ? Number(formData.get("category_id"))
+        : null;
+
+      if (!name || !date || !Number.isFinite(rawAmount) || rawAmount <= 0) {
+        throw new Error("Vyplň název, datum a kladnou částku.");
+      }
+
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) throw new Error("Uživatel není přihlášen.");
+
+      const { error } = await supabase.from("transactions").insert({
+        name,
+        date,
+        amount: normalizeTransactionAmount(rawAmount, transactionType),
+        currency,
+        user_id: user.id,
+        transaction_type: transactionType,
+        category_id: categoryId,
+      });
+
+      if (error) throw error;
+
+      success("Transakce přidána", "Nový záznam je uložený v Supabase.");
+      await onCreated();
+      onClose();
+    } catch (err) {
+      errorToast(
+        "Chyba při ukládání",
+        err instanceof Error ? err.message : "Transakci se nepodařilo uložit.",
+      );
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   return (
@@ -815,35 +1063,91 @@ function DashboardDialogs({
       <form className="grid gap-4" onSubmit={handleSubmit}>
         <div className="grid gap-2">
           <Label htmlFor="dashboard-tx-name">Název</Label>
-          <Input id="dashboard-tx-name" name="name" placeholder="Např. Kavárna" />
+          <Input
+            id="dashboard-tx-name"
+            name="name"
+            placeholder="Např. Kavárna"
+            required
+            disabled={submitting}
+          />
         </div>
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid gap-3 sm:grid-cols-3">
+          <div className="grid gap-2">
+            <Label htmlFor="dashboard-tx-type">Typ</Label>
+            <select
+              id="dashboard-tx-type"
+              name="transaction_type"
+              defaultValue="expense"
+              disabled={submitting}
+              className="h-10 rounded-lg border border-input bg-input/30 px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <option value="expense" className="bg-zinc-900 text-foreground">
+                Výdaj
+              </option>
+              <option value="income" className="bg-zinc-900 text-foreground">
+                Příjem
+              </option>
+            </select>
+          </div>
           <div className="grid gap-2">
             <Label htmlFor="dashboard-tx-date">Datum</Label>
-            <Input id="dashboard-tx-date" name="date" type="date" defaultValue="2026-02-03" />
+            <Input
+              id="dashboard-tx-date"
+              name="date"
+              type="date"
+              defaultValue={new Date().toISOString().slice(0, 10)}
+              required
+              disabled={submitting}
+            />
           </div>
           <div className="grid gap-2">
             <Label htmlFor="dashboard-tx-amount">Částka</Label>
-            <Input id="dashboard-tx-amount" name="amount" type="number" step="0.01" placeholder="-28.50" />
+            <Input
+              id="dashboard-tx-amount"
+              name="amount"
+              type="number"
+              min="0"
+              step="0.01"
+              placeholder="280"
+              required
+              disabled={submitting}
+            />
           </div>
         </div>
         <div className="grid gap-2">
           <Label htmlFor="dashboard-tx-category">Kategorie</Label>
           <select
             id="dashboard-tx-category"
-            name="category"
-            className="h-10 rounded-lg border border-input bg-input/30 px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+            name="category_id"
+            disabled={submitting}
+            className="h-10 rounded-lg border border-input bg-input/30 px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            <option>Jídlo</option>
-            <option>Příjem</option>
-            <option>Bydlení</option>
-            <option>Doprava</option>
-            <option>Zábava</option>
+            <option value="" className="bg-zinc-900 text-foreground">
+              Bez kategorie
+            </option>
+            {categories.map((category) => (
+              <option
+                key={category.id}
+                value={category.id}
+                className="bg-zinc-900 text-foreground"
+              >
+                {category.name}
+              </option>
+            ))}
           </select>
         </div>
         <div className="flex justify-end gap-2 pt-2">
-          <Button type="button" variant="outline" onClick={onClose}>Zrušit</Button>
-          <Button type="submit">Přidat</Button>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={onClose}
+            disabled={submitting}
+          >
+            Zrušit
+          </Button>
+          <Button type="submit" disabled={submitting}>
+            {submitting ? "Ukládám..." : "Přidat"}
+          </Button>
         </div>
       </form>
     </Modal>

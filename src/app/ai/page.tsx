@@ -37,12 +37,22 @@ function renderInline(text: string, keyPrefix: string): React.ReactNode[] {
   while ((match = regex.exec(text)) !== null) {
     if (match.index > lastIndex) nodes.push(text.slice(lastIndex, match.index));
     if (match[2] !== undefined) {
-      nodes.push(<strong key={`${keyPrefix}-${key++}`} className="font-semibold text-foreground">{match[2]}</strong>);
+      nodes.push(
+        <strong
+          key={`${keyPrefix}-${key++}`}
+          className="font-semibold text-foreground"
+        >
+          {match[2]}
+        </strong>,
+      );
     } else if (match[3] !== undefined) {
       nodes.push(
-        <code key={`${keyPrefix}-${key++}`} className="rounded bg-background/60 px-1 py-0.5 text-[12px] font-mono text-foreground">
+        <code
+          key={`${keyPrefix}-${key++}`}
+          className="rounded bg-background/60 px-1 py-0.5 text-[12px] font-mono text-foreground"
+        >
           {match[3]}
-        </code>
+        </code>,
       );
     } else if (match[4] !== undefined || match[5] !== undefined) {
       nodes.push(<em key={`${keyPrefix}-${key++}`}>{match[4] ?? match[5]}</em>);
@@ -90,7 +100,10 @@ function Markdown({ content }: { content: string }) {
       {blocks.map((block, i) => {
         if (block.type === "ul") {
           return (
-            <ul key={i} className="list-disc space-y-1 pl-4 marker:text-muted-foreground">
+            <ul
+              key={i}
+              className="list-disc space-y-1 pl-4 marker:text-muted-foreground"
+            >
               {block.items.map((item, j) => (
                 <li key={j}>{renderInline(item, `${i}-${j}`)}</li>
               ))}
@@ -99,7 +112,10 @@ function Markdown({ content }: { content: string }) {
         }
         if (block.type === "ol") {
           return (
-            <ol key={i} className="list-decimal space-y-1 pl-4 marker:text-muted-foreground">
+            <ol
+              key={i}
+              className="list-decimal space-y-1 pl-4 marker:text-muted-foreground"
+            >
               {block.items.map((item, j) => (
                 <li key={j}>{renderInline(item, `${i}-${j}`)}</li>
               ))}
@@ -116,9 +132,17 @@ function Markdown({ content }: { content: string }) {
 function suggestFollowUps(text: string): string[] {
   const t = text.toLowerCase();
   if (t.includes("limit"))
-    return ["Nastav konkrétní limity", "Kolik ušetřím za 3 měsíce?", "Co když limit překročím?"];
+    return [
+      "Nastav konkrétní limity",
+      "Kolik ušetřím za 3 měsíce?",
+      "Co když limit překročím?",
+    ];
   if (t.includes("rozpoč"))
-    return ["Uprav rozpočet na úspory 50 %", "Přidej rezervu na auto", "Kde nejvíc utrácím?"];
+    return [
+      "Uprav rozpočet na úspory 50 %",
+      "Přidej rezervu na auto",
+      "Kde nejvíc utrácím?",
+    ];
   if (t.includes("zůstat") || t.includes("předpov") || t.includes("březn"))
     return ["Jak zrychlit růst zůstatku?", "Naplánuj rozpočet", "Kde ušetřím?"];
   return ["Kde ušetřím?", "Naplánuj rozpočet", "Předpověď zůstatku"];
@@ -142,19 +166,69 @@ const PROMPTS = [
 function makeReply(prompt: string) {
   const lower = prompt.toLowerCase();
 
-  if (lower.includes("ušet") || lower.includes("šet")) {
-    return "Nejrychlejší úspora je snížit zábavu o €45 a jídlo mimo domov o €60. Zachováte tím tempo úspor kolem €2 050 za měsíc bez zásahu do nájmu nebo dopravy.";
+  if (lower.includes("ušet") || lower.includes("šet") || lower.includes("limit")) {
+    return [
+      "Podle tvých dat jsou tři rychlé úspory:",
+      "",
+      "- **Zábava**: strop **2 400 Kč/měsíc** (teď ~3 500) → ušetříš **1 100 Kč**",
+      "- **Jídlo mimo domov**: omez na 2× týdně → **1 500 Kč**",
+      "- **Předplatné**: zruš nevyužité → **330 Kč**",
+      "",
+      "Tím udržíš tempo úspor kolem **51 250 Kč/měsíc** bez zásahu do nájmu nebo dopravy.",
+    ].join("\n");
   }
 
   if (lower.includes("rozpo")) {
-    return "Doporučený rozpočet: bydlení €850, jídlo €360, doprava €180, zábava €140, rezerva €250. Při příjmu €4 300 by zůstalo přibližně €2 520 na úspory a cíle.";
+    return [
+      "Navrhuji rozpočet podle pravidla **50/30/20** pro tvůj příjem **107 500 Kč**:",
+      "",
+      "1. **Potřeby** (~53 750 Kč): bydlení 21 250, jídlo 9 000, doprava 4 500, energie 5 000",
+      "2. **Přání** (~32 250 Kč): zábava 3 500, nákupy 3 750, ostatní",
+      "3. **Úspory** (~21 500 Kč): rezerva a cíle",
+      "",
+      "Při disciplíně ti zůstane přes **63 000 Kč** na úspory a cíle.",
+    ].join("\n");
   }
 
-  if (lower.includes("zůstat") || lower.includes("pred") || lower.includes("před")) {
-    return "Při současném tempu bude odhadovaný zůstatek na konci března €6 120. Největší riziko jsou nepravidelné výdaje za auto, které v lednu zvedly výdaje o €420.";
+  if (
+    lower.includes("zůstat") ||
+    lower.includes("pred") ||
+    lower.includes("před") ||
+    lower.includes("březn")
+  ) {
+    return [
+      "Předpověď na konec **března**:",
+      "",
+      "- Odhadovaný zůstatek: **153 000 Kč**",
+      "- Tempo úspor: **+49 000 Kč/měsíc**",
+      "- ⚠️ Riziko: nepravidelné výdaje za **auto** (v lednu +10 500 Kč)",
+      "",
+      "Doporučuji založit rezervu **2 500 Kč/měsíc** právě na auto.",
+    ].join("\n");
   }
 
-  return "Únor vypadá zdravě: příjem €4 300, výdaje €2 340 a úspora €1 960. Oproti lednu jsou výdaje nižší o 8,2 %, hlavně díky menším jednorázovým platbám.";
+  if (lower.includes("kategor") || lower.includes("utrác") || lower.includes("výdaj")) {
+    return [
+      "Tvoje největší výdajové kategorie tento měsíc:",
+      "",
+      "1. **Bydlení** — 21 250 Kč (38 %)",
+      "2. **Auto** — 10 500 Kč (19 %)",
+      "3. **Jídlo** — 7 750 Kč (14 %)",
+      "4. **Zábava** — 4 750 Kč (9 %)",
+      "",
+      "Největší prostor ke zlepšení je u **auta** a **jídla**.",
+    ].join("\n");
+  }
+
+  return [
+    "Únor vypadá zdravě 👍",
+    "",
+    "- Příjem: **107 500 Kč**",
+    "- Výdaje: **58 500 Kč**",
+    "- Úspora: **49 000 Kč** (45,6 % příjmu)",
+    "",
+    "Oproti lednu jsou výdaje nižší o **8,2 %**. Chceš shrnout kategorie nebo navrhnout rozpočet?",
+  ].join("\n");
 }
 
 export default function AiPage() {
@@ -188,18 +262,22 @@ export default function AiPage() {
 
   const latestInsight = useMemo(
     () => [
-      { label: "Úspory tento měsíc", value: "€1 960" },
+      { label: "Úspory tento měsíc", value: "49 000 Kč" },
+      { label: "Míra úspor", value: "45,6 %" },
       { label: "Největší výdaj", value: "Nájem" },
       { label: "Riziko rozpočtu", value: "Auto" },
     ],
-    []
+    [],
   );
 
   function appendToLast(chunk: string) {
     setMessages((current) => {
       const next = [...current];
       const last = next[next.length - 1];
-      next[next.length - 1] = { role: "assistant", content: last.content + chunk };
+      next[next.length - 1] = {
+        role: "assistant",
+        content: last.content + chunk,
+      };
       return next;
     });
   }
@@ -243,7 +321,10 @@ export default function AiPage() {
 
       setThinking(false);
       setStreaming(true);
-      setMessages((current) => [...current, { role: "assistant", content: "" }]);
+      setMessages((current) => [
+        ...current,
+        { role: "assistant", content: "" },
+      ]);
 
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
@@ -265,7 +346,10 @@ export default function AiPage() {
     const trimmed = text.trim();
     if (!trimmed || busy) return;
 
-    const history: Message[] = [...messages, { role: "user", content: trimmed }];
+    const history: Message[] = [
+      ...messages,
+      { role: "user", content: trimmed },
+    ];
     setMessages(history);
     setInput("");
     void runAssistant(history, trimmed);
@@ -287,22 +371,25 @@ export default function AiPage() {
               "flex items-center gap-2 rounded-full border px-3 py-1.5 text-[12px] font-medium transition-colors",
               busy
                 ? "border-indigo-400/20 bg-indigo-500/10 text-indigo-300"
-                : "border-emerald-400/20 bg-emerald-500/10 text-emerald-300"
+                : "border-emerald-400/20 bg-emerald-500/10 text-emerald-300",
             )}
           >
             <span className="relative flex size-1.5">
               <motion.span
                 className={cn(
                   "absolute inline-flex size-full rounded-full",
-                  busy ? "bg-indigo-300" : "bg-emerald-300"
+                  busy ? "bg-indigo-300" : "bg-emerald-300",
                 )}
-                animate={{ opacity: [0.4, 1, 0.4], scale: busy ? [1, 1.6, 1] : 1 }}
+                animate={{
+                  opacity: [0.4, 1, 0.4],
+                  scale: busy ? [1, 1.6, 1] : 1,
+                }}
                 transition={{ duration: 1.2, repeat: Infinity }}
               />
               <span
                 className={cn(
                   "relative inline-flex size-1.5 rounded-full",
-                  busy ? "bg-indigo-300" : "bg-emerald-300"
+                  busy ? "bg-indigo-300" : "bg-emerald-300",
                 )}
               />
             </span>
@@ -331,190 +418,216 @@ export default function AiPage() {
           </div>
         </div>
       ) : (
-      <RevealGroup className="grid min-h-[520px] flex-1 gap-5 xl:grid-cols-[1fr_340px]">
-        <RevealItem className="min-h-0">
-        <Card className="h-full min-h-0 gap-0 overflow-hidden ring-1 ring-foreground/[0.08] shadow-[0_10px_30px_-18px_rgba(0,0,0,0.7)]">
-          <div className="flex items-center justify-between border-b border-border/60 px-5 py-4">
-            <div className="flex items-center gap-2.5">
-              <span className="flex size-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                <Bot className="size-4" />
-              </span>
-              <div>
-                <h2 className="text-[14px] font-semibold leading-tight text-foreground">Koin AI</h2>
-                <p className="text-[11px] text-muted-foreground">
-                  {busy ? "přemýšlí…" : "online · odpoví okamžitě"}
-                </p>
+        <RevealGroup className="grid min-h-[520px] flex-1 gap-5 xl:grid-cols-[1fr_340px]">
+          <RevealItem className="min-h-0">
+            <Card className="h-full min-h-0 gap-0 overflow-hidden ring-1 ring-foreground/[0.08] shadow-[0_10px_30px_-18px_rgba(0,0,0,0.7)]">
+              <div className="flex items-center justify-between border-b border-border/60 px-5 py-4">
+                <div className="flex items-center gap-2.5">
+                  <span className="flex size-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                    <Bot className="size-4" />
+                  </span>
+                  <div>
+                    <h2 className="text-[14px] font-semibold leading-tight text-foreground">
+                      Koin AI
+                    </h2>
+                    <p className="text-[11px] text-muted-foreground">
+                      {busy ? "přemýšlí…" : "online · odpoví okamžitě"}
+                    </p>
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
 
-          <div className="flex min-h-0 flex-1 flex-col">
-            <div className="flex-1 space-y-4 overflow-auto px-5 py-5">
-              {messages.map((message, index) => {
-                const assistant = message.role === "assistant";
-                const Icon = assistant ? Bot : User;
+              <div className="flex min-h-0 flex-1 flex-col">
+                <div className="flex-1 space-y-4 overflow-auto px-5 py-5">
+                  {messages.map((message, index) => {
+                    const assistant = message.role === "assistant";
+                    const Icon = assistant ? Bot : User;
 
-                return (
-                  <motion.div
-                    key={index}
-                    layout
-                    initial={{ opacity: 0, y: 10, scale: 0.97 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    transition={{ type: "spring", stiffness: 460, damping: 32 }}
-                    className={cn("flex gap-3", assistant ? "justify-start" : "justify-end")}
-                  >
-                    {assistant && (
-                      <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
-                        <Icon className="size-4" />
-                      </span>
-                    )}
-                    <div
-                      className={cn(
-                        "max-w-[78%] rounded-2xl px-4 py-3 text-[13px] leading-5 shadow-sm",
-                        assistant
-                          ? "rounded-tl-sm border border-border/70 bg-secondary/40 text-foreground"
-                          : "rounded-tr-sm bg-primary text-primary-foreground"
-                      )}
-                    >
-                      {assistant ? <Markdown content={message.content} /> : message.content}
-                    </div>
-                    {!assistant && (
-                      <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-indigo-500 text-white">
-                        <Icon className="size-4" />
-                      </span>
-                    )}
-                  </motion.div>
-                );
-              })}
-
-              <AnimatePresence>
-                {thinking && (
-                  <motion.div
-                    key="typing"
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -6 }}
-                    className="flex gap-3"
-                  >
-                    <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
-                      <Bot className="size-4" />
-                    </span>
-                    <div className="flex items-center rounded-2xl rounded-tl-sm border border-border/70 bg-secondary/40 px-4 py-3">
-                      <span className="text-shimmer text-[13px] font-medium">přemýšlí…</span>
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-
-              {/* Follow-up suggestions after the latest assistant reply */}
-              <AnimatePresence>
-                {!busy && messages.length > 1 && lastMessage?.role === "assistant" && (
-                  <motion.div
-                    key="followups"
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: 6 }}
-                    transition={{ duration: 0.25 }}
-                    className="flex flex-wrap gap-2 pl-11"
-                  >
-                    {suggestFollowUps(lastMessage.content).map((s, i) => (
-                      <motion.button
-                        key={s}
-                        onClick={() => sendMessage(s)}
-                        initial={{ opacity: 0, scale: 0.92 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        transition={{ delay: i * 0.06 }}
-                        whileTap={{ scale: 0.94 }}
-                        className="inline-flex items-center gap-1.5 rounded-full border border-primary/25 bg-primary/5 px-3 py-1.5 text-[12px] text-foreground/80 transition-colors hover:border-primary/40 hover:bg-primary/10 hover:text-foreground"
+                    return (
+                      <motion.div
+                        key={index}
+                        layout
+                        initial={{ opacity: 0, y: 10, scale: 0.97 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        transition={{
+                          type: "spring",
+                          stiffness: 460,
+                          damping: 32,
+                        }}
+                        className={cn(
+                          "flex gap-3",
+                          assistant ? "justify-start" : "justify-end",
+                        )}
                       >
-                        <Sparkles className="size-3 text-primary" />
-                        {s}
+                        {assistant && (
+                          <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                            <Icon className="size-4" />
+                          </span>
+                        )}
+                        <div
+                          className={cn(
+                            "max-w-[78%] rounded-2xl px-4 py-3 text-[13px] leading-5 shadow-sm",
+                            assistant
+                              ? "rounded-tl-sm border border-border/70 bg-secondary/40 text-foreground"
+                              : "rounded-tr-sm bg-primary text-primary-foreground",
+                          )}
+                        >
+                          {assistant ? (
+                            <Markdown content={message.content} />
+                          ) : (
+                            message.content
+                          )}
+                        </div>
+                        {!assistant && (
+                          <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-indigo-500 text-white">
+                            <Icon className="size-4" />
+                          </span>
+                        )}
+                      </motion.div>
+                    );
+                  })}
+
+                  <AnimatePresence>
+                    {thinking && (
+                      <motion.div
+                        key="typing"
+                        initial={{ opacity: 0, y: 8 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -6 }}
+                        className="flex gap-3"
+                      >
+                        <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                          <Bot className="size-4" />
+                        </span>
+                        <div className="flex items-center rounded-2xl rounded-tl-sm border border-border/70 bg-secondary/40 px-4 py-3">
+                          <span className="text-shimmer text-[13px] font-medium">
+                            přemýšlí…
+                          </span>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+
+                  {/* Follow-up suggestions after the latest assistant reply */}
+                  <AnimatePresence>
+                    {!busy &&
+                      messages.length > 1 &&
+                      lastMessage?.role === "assistant" && (
+                        <motion.div
+                          key="followups"
+                          initial={{ opacity: 0, y: 8 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: 6 }}
+                          transition={{ duration: 0.25 }}
+                          className="flex flex-wrap gap-2 pl-11"
+                        >
+                          {suggestFollowUps(lastMessage.content).map((s, i) => (
+                            <motion.button
+                              key={s}
+                              onClick={() => sendMessage(s)}
+                              initial={{ opacity: 0, scale: 0.92 }}
+                              animate={{ opacity: 1, scale: 1 }}
+                              transition={{ delay: i * 0.06 }}
+                              whileTap={{ scale: 0.94 }}
+                              className="inline-flex items-center gap-1.5 rounded-full border border-primary/25 bg-primary/5 px-3 py-1.5 text-[12px] text-foreground/80 transition-colors hover:border-primary/40 hover:bg-primary/10 hover:text-foreground"
+                            >
+                              <Sparkles className="size-3 text-primary" />
+                              {s}
+                            </motion.button>
+                          ))}
+                        </motion.div>
+                      )}
+                  </AnimatePresence>
+
+                  <div ref={bottomRef} />
+                </div>
+
+                <div className="border-t border-border/60 px-5 py-4">
+                  <div className="mb-3 flex flex-wrap gap-2">
+                    {PROMPTS.map(({ label, icon: Icon }) => (
+                      <motion.button
+                        key={label}
+                        onClick={() => sendMessage(label)}
+                        disabled={busy}
+                        whileTap={{ scale: 0.94 }}
+                        className="inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-secondary/35 px-3 py-1.5 text-[12px] text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        <Icon className="size-3.5" />
+                        {label}
                       </motion.button>
                     ))}
-                  </motion.div>
-                )}
-              </AnimatePresence>
-
-              <div ref={bottomRef} />
-            </div>
-
-            <div className="border-t border-border/60 px-5 py-4">
-              <div className="mb-3 flex flex-wrap gap-2">
-                {PROMPTS.map(({ label, icon: Icon }) => (
-                  <motion.button
-                    key={label}
-                    onClick={() => sendMessage(label)}
-                    disabled={busy}
-                    whileTap={{ scale: 0.94 }}
-                    className="inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-secondary/35 px-3 py-1.5 text-[12px] text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    <Icon className="size-3.5" />
-                    {label}
-                  </motion.button>
-                ))}
+                  </div>
+                  <form onSubmit={handleSubmit} className="flex gap-2">
+                    <Input
+                      className="h-10"
+                      value={input}
+                      onChange={(e) => setInput(e.target.value)}
+                      placeholder="Zeptejte se na rozpočet, výdaje nebo úspory..."
+                      disabled={busy}
+                    />
+                    <Button
+                      className="h-10 w-11"
+                      aria-label="Odeslat zprávu"
+                      disabled={busy || !input.trim()}
+                    >
+                      {busy ? (
+                        <Loader2 className="size-4 animate-spin" />
+                      ) : (
+                        <Send className="size-4" />
+                      )}
+                    </Button>
+                  </form>
+                </div>
               </div>
-              <form onSubmit={handleSubmit} className="flex gap-2">
-                <Input
-                  className="h-10"
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  placeholder="Zeptejte se na rozpočet, výdaje nebo úspory..."
-                  disabled={busy}
-                />
-                <Button
-                  className="h-10 w-11"
-                  aria-label="Odeslat zprávu"
-                  disabled={busy || !input.trim()}
-                >
-                  {busy ? (
-                    <Loader2 className="size-4 animate-spin" />
-                  ) : (
-                    <Send className="size-4" />
-                  )}
-                </Button>
-              </form>
-            </div>
+            </Card>
+          </RevealItem>
+
+          <div className="flex flex-col gap-5">
+            <RevealItem>
+              <Card className="px-5 py-5 ring-1 ring-foreground/[0.08]">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="size-4 text-primary" />
+                  <h2 className="text-[15px] font-semibold text-foreground">
+                    Rychlé insighty
+                  </h2>
+                </div>
+                <div className="grid gap-3">
+                  {latestInsight.map((item, i) => (
+                    <motion.div
+                      key={item.label}
+                      initial={{ opacity: 0, x: 8 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: 0.1 + i * 0.07 }}
+                      className="rounded-lg border border-border/60 bg-secondary/30 px-3 py-3 transition-colors hover:border-foreground/15 hover:bg-secondary/50"
+                    >
+                      <p className="text-[11px] uppercase tracking-wider text-muted-foreground">
+                        {item.label}
+                      </p>
+                      <p className="mt-1 text-[15px] font-semibold text-foreground">
+                        {item.value}
+                      </p>
+                    </motion.div>
+                  ))}
+                </div>
+              </Card>
+            </RevealItem>
+
+            <RevealItem>
+              <Card className="px-5 py-5 ring-1 ring-foreground/[0.08]">
+                <div className="flex items-center gap-2">
+                  <CalendarClock className="size-4 text-primary" />
+                  <h2 className="text-[15px] font-semibold text-foreground">
+                    Doporučení týdne
+                  </h2>
+                </div>
+                <p className="text-[13px] leading-5 text-muted-foreground">
+                  Nastavte limit 2 400 Kč pro zábavu do konce týdne. Podle
+                  trendu vám to udrží měsíční úsporu nad 45 % příjmů.
+                </p>
+              </Card>
+            </RevealItem>
           </div>
-        </Card>
-        </RevealItem>
-
-        <div className="flex flex-col gap-5">
-          <RevealItem>
-          <Card className="px-5 py-5 ring-1 ring-foreground/[0.08]">
-            <div className="flex items-center gap-2">
-              <Sparkles className="size-4 text-primary" />
-              <h2 className="text-[15px] font-semibold text-foreground">Rychlé insighty</h2>
-            </div>
-            <div className="grid gap-3">
-              {latestInsight.map((item, i) => (
-                <motion.div
-                  key={item.label}
-                  initial={{ opacity: 0, x: 8 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: 0.1 + i * 0.07 }}
-                  className="rounded-lg border border-border/60 bg-secondary/30 px-3 py-3 transition-colors hover:border-foreground/15 hover:bg-secondary/50"
-                >
-                  <p className="text-[11px] uppercase tracking-wider text-muted-foreground">{item.label}</p>
-                  <p className="mt-1 text-[15px] font-semibold text-foreground">{item.value}</p>
-                </motion.div>
-              ))}
-            </div>
-          </Card>
-          </RevealItem>
-
-          <RevealItem>
-          <Card className="px-5 py-5 ring-1 ring-foreground/[0.08]">
-            <div className="flex items-center gap-2">
-              <CalendarClock className="size-4 text-primary" />
-              <h2 className="text-[15px] font-semibold text-foreground">Doporučení týdne</h2>
-            </div>
-            <p className="text-[13px] leading-5 text-muted-foreground">
-              Nastavte limit €95 pro zábavu do konce týdne. Podle trendu vám to udrží měsíční úsporu nad 45 % příjmů.
-            </p>
-          </Card>
-          </RevealItem>
-        </div>
-      </RevealGroup>
+        </RevealGroup>
       )}
     </div>
   );

@@ -3,7 +3,13 @@
 import { Suspense, useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useSearchParams } from "next/navigation";
-import { BarChart3, ListOrdered, PiggyBank, TrendingDown, TrendingUp } from "lucide-react";
+import {
+  BarChart3,
+  ListOrdered,
+  PiggyBank,
+  TrendingDown,
+  TrendingUp,
+} from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { IncomeExpensesChart } from "@/components/dashboard/income-expenses-chart";
 import { RevealGroup, RevealItem } from "@/components/ui/reveal";
@@ -11,9 +17,16 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { PageHeader } from "@/components/layout/page-header";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
+import { formatMoney } from "@/lib/money";
+import { useProfileCurrency } from "@/lib/use-profile-currency";
 
 type AggregatedExpense = { name: string; value: number };
-type MonthlyData = { monthLabel: string; income: number; expenses: number; savings: number };
+type MonthlyData = {
+  monthLabel: string;
+  income: number;
+  expenses: number;
+  savings: number;
+};
 
 function getCategoryName(categories: unknown) {
   if (Array.isArray(categories)) {
@@ -23,7 +36,9 @@ function getCategoryName(categories: unknown) {
       : "Bez kategorie";
   }
 
-  return typeof categories === "object" && categories !== null && "name" in categories
+  return typeof categories === "object" &&
+    categories !== null &&
+    "name" in categories
     ? String(categories.name)
     : "Bez kategorie";
 }
@@ -49,7 +64,7 @@ function MetricCard({
         className={cn(
           "text-3xl font-semibold tracking-tight tabular-nums",
           tone === "green" && "text-emerald-400",
-          tone === "red" && "text-red-400"
+          tone === "red" && "text-red-400",
         )}
       >
         {value}
@@ -58,7 +73,13 @@ function MetricCard({
   );
 }
 
-export function SavingsBars({ data }: { data: MonthlyData[] }) {
+export function SavingsBars({
+  data,
+  currency = "CZK",
+}: {
+  data: MonthlyData[];
+  currency?: string;
+}) {
   const absoluteSavings = data.map((d) => Math.abs(d.savings));
   const max = Math.max(...absoluteSavings, 1);
 
@@ -75,18 +96,19 @@ export function SavingsBars({ data }: { data: MonthlyData[] }) {
             transition={{ duration: 0.15, ease: "easeOut" }}
             className={cn(
               "absolute z-10 rounded-md border px-2.5 py-1.5 text-[12px] font-medium shadow-md pointer-events-none tabular-nums whitespace-nowrap",
-              data[hoveredIndex].savings >= 0 
+              data[hoveredIndex].savings >= 0
                 ? "border-border bg-popover text-popover-foreground"
-                : "border-red-500/30 bg-red-950/90 text-red-200"
+                : "border-red-500/30 bg-red-950/90 text-red-200",
             )}
             style={{
-              left: `${(hoveredIndex / data.length) * 100 + (100 / data.length) / 2}%`,
+              left: `${(hoveredIndex / data.length) * 100 + 100 / data.length / 2}%`,
               transform: "translateX(-50%)",
               top: "0px",
             }}
           >
-            {data[hoveredIndex].savings < 0 ? "-€" : "€"}
-            {Math.abs(data[hoveredIndex].savings).toLocaleString("cs-CZ", { maximumFractionDigits: 0 })}
+            {formatMoney(data[hoveredIndex].savings, currency, {
+              sign: "auto",
+            })}
           </motion.div>
         )}
       </AnimatePresence>
@@ -108,11 +130,11 @@ export function SavingsBars({ data }: { data: MonthlyData[] }) {
                 <div
                   className={cn(
                     "w-full rounded-md transition-all duration-300",
-                    isNegative 
-                      ? "bg-red-500/90 shadow-[0_0_18px_oklch(0.62_0.18_20_/_18%)]" 
-                      : "bg-emerald-500/90 shadow-[0_0_18px_oklch(0.72_0.16_145_/_18%)]"
+                    isNegative
+                      ? "bg-red-500/90 shadow-[0_0_18px_oklch(0.62_0.18_20_/_18%)]"
+                      : "bg-emerald-500/90 shadow-[0_0_18px_oklch(0.72_0.16_145_/_18%)]",
                   )}
-                  style={{ 
+                  style={{
                     height: `${percentage}%`,
                     filter: isHovered ? "brightness(1.15)" : "none",
                   }}
@@ -149,12 +171,13 @@ function AnalyticsPageFallback() {
 function AnalyticsPageContent() {
   const supabase = createClient();
   const searchParams = useSearchParams();
-  
+  const currency = useProfileCurrency();
+
   const currentYear = new Date().getFullYear();
   const selectedYear = searchParams.get("year") || currentYear.toString();
 
   const [loading, setLoading] = useState(true);
-  
+
   const [avgExpenses, setAvgExpenses] = useState(0);
   const [avgIncome, setAvgIncome] = useState(0);
   const [totalSavings, setTotalSavings] = useState(0);
@@ -165,7 +188,9 @@ function AnalyticsPageContent() {
     async function fetchAndCalculateAnalytics() {
       try {
         setLoading(true);
-        const { data: { user } } = await supabase.auth.getUser();
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
         if (!user) return;
 
         const startDate = `${selectedYear}-01-01`;
@@ -173,12 +198,14 @@ function AnalyticsPageContent() {
 
         const { data: transactions, error } = await supabase
           .from("transactions")
-          .select(`
+          .select(
+            `
             amount,
             transaction_type,
             date,
             categories ( name )
-          `)
+          `,
+          )
           .eq("user_id", user.id)
           .gte("date", startDate)
           .lte("date", endDate);
@@ -186,15 +213,32 @@ function AnalyticsPageContent() {
         if (error) throw error;
 
         if (!transactions || transactions.length === 0) {
-          setAvgExpenses(0); setAvgIncome(0); setTotalSavings(0);
-          setTopExpenses([]); setMonthlyHistory([]);
+          setAvgExpenses(0);
+          setAvgIncome(0);
+          setTotalSavings(0);
+          setTopExpenses([]);
+          setMonthlyHistory([]);
           return;
         }
 
         const categoryMap: Record<string, number> = {};
-        const monthlyMap: Record<string, { income: number; expenses: number }> = {};
-        
-        const monthNames = ["Jan", "Feb", "Mar", "Apr", "Maj", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dec"];
+        const monthlyMap: Record<string, { income: number; expenses: number }> =
+          {};
+
+        const monthNames = [
+          "Jan",
+          "Feb",
+          "Mar",
+          "Apr",
+          "Maj",
+          "Jun",
+          "Jul",
+          "Aug",
+          "Sep",
+          "Okt",
+          "Nov",
+          "Dec",
+        ];
         monthNames.forEach((m) => {
           monthlyMap[m] = { income: 0, expenses: 0 };
         });
@@ -239,14 +283,14 @@ function AnalyticsPageContent() {
           expenses: monthlyMap[m].expenses,
           savings: monthlyMap[m].income - monthlyMap[m].expenses,
         }));
-        
+
         const currentMonthIdx = new Date().getMonth();
-        const filteredHistory = selectedYear === currentYear.toString() 
-          ? historyData.slice(0, currentMonthIdx + 1)
-          : historyData;
+        const filteredHistory =
+          selectedYear === currentYear.toString()
+            ? historyData.slice(0, currentMonthIdx + 1)
+            : historyData;
 
         setMonthlyHistory(filteredHistory);
-
       } catch (err) {
         console.error("Chyba při výpočtu analytiky:", err);
       } finally {
@@ -267,12 +311,13 @@ function AnalyticsPageContent() {
       {loading ? (
         <AnalyticsSkeleton />
       ) : (
-        <AnalyticsContent 
+        <AnalyticsContent
           avgExpenses={avgExpenses}
           avgIncome={avgIncome}
           totalSavings={totalSavings}
           topExpenses={topExpenses}
           monthlyHistory={monthlyHistory}
+          currency={currency}
         />
       )}
     </div>
@@ -285,39 +330,41 @@ function AnalyticsContent({
   totalSavings,
   topExpenses,
   monthlyHistory,
+  currency,
 }: {
   avgExpenses: number;
   avgIncome: number;
   totalSavings: number;
   topExpenses: AggregatedExpense[];
   monthlyHistory: MonthlyData[];
+  currency: string;
 }) {
   return (
     <RevealGroup className="flex flex-col gap-6">
       {/* Hlavní metriky */}
       <div className="grid gap-4 md:grid-cols-3">
         <RevealItem>
-          <MetricCard 
-            label="Průměrné měsíční výdaje" 
-            value={`€${avgExpenses.toLocaleString("cs-CZ", { maximumFractionDigits: 0 })}`} 
-            tone="red" 
-            icon={TrendingDown} 
+          <MetricCard
+            label="Průměrné měsíční výdaje"
+            value={formatMoney(avgExpenses, currency)}
+            tone="red"
+            icon={TrendingDown}
           />
         </RevealItem>
         <RevealItem>
-          <MetricCard 
-            label="Průměrný příjem" 
-            value={`€${avgIncome.toLocaleString("cs-CZ", { maximumFractionDigits: 0 })}`} 
-            tone="green" 
-            icon={TrendingUp} 
+          <MetricCard
+            label="Průměrný příjem"
+            value={formatMoney(avgIncome, currency)}
+            tone="green"
+            icon={TrendingUp}
           />
         </RevealItem>
         <RevealItem>
-          <MetricCard 
-            label="Čistá úspora za rok" 
-            value={`€${totalSavings.toLocaleString("cs-CZ", { maximumFractionDigits: 0 })}`} 
+          <MetricCard
+            label="Čistá úspora za rok"
+            value={formatMoney(totalSavings, currency, { sign: "auto" })}
             tone={totalSavings >= 0 ? "green" : "red"}
-            icon={PiggyBank} 
+            icon={PiggyBank}
           />
         </RevealItem>
       </div>
@@ -327,28 +374,38 @@ function AnalyticsContent({
             <div>
               <div className="flex items-center gap-2">
                 <BarChart3 className="size-4 text-muted-foreground" />
-                <h2 className="text-[15px] font-semibold text-foreground">Příjmy vs Výdaje</h2>
+                <h2 className="text-[15px] font-semibold text-foreground">
+                  Příjmy vs Výdaje
+                </h2>
               </div>
-              <p className="mt-1 text-[12px] text-muted-foreground">Přehled po měsících</p>
+              <p className="mt-1 text-[12px] text-muted-foreground">
+                Přehled po měsících
+              </p>
             </div>
-            <span className={cn(
-              "rounded-full border px-3 py-1 text-[12px] font-medium",
-              totalSavings >= 0 
-                ? "border-emerald-400/20 bg-emerald-500/10 text-emerald-300"
-                : "border-red-400/20 bg-red-500/10 text-red-300"
-            )}>
-              {totalSavings >= 0 ? `€${totalSavings.toLocaleString()} úspora` : `€${Math.abs(totalSavings).toLocaleString()} v mínusu`}
+            <span
+              className={cn(
+                "rounded-full border px-3 py-1 text-[12px] font-medium",
+                totalSavings >= 0
+                  ? "border-emerald-400/20 bg-emerald-500/10 text-emerald-300"
+                  : "border-red-400/20 bg-red-500/10 text-red-300",
+              )}
+            >
+              {totalSavings >= 0
+                ? `${formatMoney(totalSavings, currency)} úspora`
+                : `${formatMoney(Math.abs(totalSavings), currency)} v mínusu`}
             </span>
           </div>
-          <IncomeExpensesChart data={monthlyHistory} />
+          <IncomeExpensesChart data={monthlyHistory} currency={currency} />
         </Card>
       </RevealItem>
 
       <div className="grid gap-5 xl:grid-cols-[1fr_0.5fr]">
         <RevealItem>
           <Card className="px-4 py-5 sm:px-5">
-            <h2 className="text-[15px] font-semibold text-foreground">Trend měsíčních úspor</h2>
-            <SavingsBars data={monthlyHistory} />
+            <h2 className="text-[15px] font-semibold text-foreground">
+              Trend měsíčních úspor
+            </h2>
+            <SavingsBars data={monthlyHistory} currency={currency} />
           </Card>
         </RevealItem>
 
@@ -356,19 +413,26 @@ function AnalyticsContent({
           <Card className="px-4 py-5 sm:px-5">
             <div className="flex items-center gap-2 mb-3">
               <ListOrdered className="size-4 text-muted-foreground" />
-              <h2 className="text-[15px] font-semibold text-foreground">Největší výdaje</h2>
+              <h2 className="text-[15px] font-semibold text-foreground">
+                Největší výdaje
+              </h2>
             </div>
             <div className="flex flex-col divide-y divide-border/60">
               {topExpenses.map((expense) => (
-                <div key={expense.name} className="flex items-center justify-between py-3 text-[13px]">
+                <div
+                  key={expense.name}
+                  className="flex items-center justify-between py-3 text-[13px]"
+                >
                   <span className="text-foreground">{expense.name}</span>
                   <span className="font-medium tabular-nums text-foreground">
-                    €{expense.value.toLocaleString("cs-CZ", { maximumFractionDigits: 0 })}
+                    {formatMoney(expense.value, currency)}
                   </span>
                 </div>
               ))}
               {topExpenses.length === 0 && (
-                <p className="text-[12px] text-muted-foreground py-4 text-center">Žádné výdaje pro tento rok.</p>
+                <p className="text-[12px] text-muted-foreground py-4 text-center">
+                  Žádné výdaje pro tento rok.
+                </p>
               )}
             </div>
           </Card>

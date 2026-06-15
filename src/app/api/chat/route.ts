@@ -9,18 +9,20 @@ const SYSTEM_PROMPT = `Jsi „Koin AI", osobní finanční asistent v aplikaci p
 Odpovídáš česky, stručně, prakticky a přátelsky. Zaměřuješ se na rozpočet, výdaje, úspory a cíle.
 
 Aktuální data uživatele (únor 2026):
-- Příjem: €4 300
-- Výdaje: €2 340
-- Úspory: €1 960 (45,6 % příjmu)
-- Největší kategorie: bydlení/nájem €750, jídlo, doprava, zábava
+    - Příjem: 107 500 Kč
+    - Výdaje: 58 500 Kč
+    - Úspory: 49 000 Kč (45,6 % příjmu)
+    - Největší kategorie: bydlení/nájem 18 750 Kč, jídlo, doprava, zábava
 - Riziko: nepravidelné výdaje za auto
 
-Když navrhuješ částky, používej formát s eurem (např. €120). Drž odpovědi stručné.
+Když navrhuješ částky, používej české koruny ve formátu např. 3 000 Kč. Drž odpovědi stručné.
 
 Formátování (Markdown): pro výčty používej odrážky "- " nebo číslovaný seznam "1. " (každá položka na vlastním řádku, ne v jednom odstavci). Klíčové pojmy a částky zvýrazni **tučně**. Bez nadpisů a tabulek.`;
 
 const MODEL =
-  process.env.OPENAI_MODEL ?? process.env.OPENAI_ESTIMATOR_MODEL ?? "gpt-4o-mini";
+  process.env.OPENAI_MODEL ??
+  process.env.OPENAI_ESTIMATOR_MODEL ??
+  "gpt-4o-mini";
 
 export async function POST(req: NextRequest) {
   const apiKey = process.env.OPENAI_API_KEY;
@@ -33,13 +35,20 @@ export async function POST(req: NextRequest) {
   let messages: ChatMessage[];
   try {
     const body = await req.json();
-    messages = Array.isArray(body?.messages) ? (body.messages as ChatMessage[]) : [];
+    messages = Array.isArray(body?.messages)
+      ? (body.messages as ChatMessage[])
+      : [];
   } catch {
     return Response.json({ error: "bad_request" }, { status: 400 });
   }
 
   const sanitized = messages
-    .filter((m) => m && (m.role === "user" || m.role === "assistant") && typeof m.content === "string")
+    .filter(
+      (m) =>
+        m &&
+        (m.role === "user" || m.role === "assistant") &&
+        typeof m.content === "string",
+    )
     .slice(-12)
     .map((m) => ({ role: m.role, content: m.content }));
 
@@ -64,7 +73,10 @@ export async function POST(req: NextRequest) {
 
   if (!upstream.ok || !upstream.body) {
     const detail = await upstream.text().catch(() => "");
-    return Response.json({ error: "upstream_error", status: upstream.status, detail }, { status: 502 });
+    return Response.json(
+      { error: "upstream_error", status: upstream.status, detail },
+      { status: 502 },
+    );
   }
 
   // Transform OpenAI's SSE stream into a plain-text token stream.
@@ -97,7 +109,8 @@ export async function POST(req: NextRequest) {
 
             try {
               const json = JSON.parse(data);
-              const delta: string | undefined = json?.choices?.[0]?.delta?.content;
+              const delta: string | undefined =
+                json?.choices?.[0]?.delta?.content;
               if (delta) controller.enqueue(encoder.encode(delta));
             } catch {
               /* ignore keep-alive / partial frames */
