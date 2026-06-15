@@ -16,18 +16,41 @@ import { AuthBackgroundCards } from "@/components/layout/auth-bg-cards";
 import { createClient } from "@/lib/supabase/client";
 
 const REQUIREMENTS = [
-  { id: "length",    label: "Alespoň 8 znaků",          test: (p: string) => p.length >= 8 },
-  { id: "uppercase", label: "Velké písmeno",             test: (p: string) => /[A-Z]/.test(p) },
-  { id: "lowercase", label: "Malé písmeno",              test: (p: string) => /[a-z]/.test(p) },
-  { id: "number",    label: "Číslo",                     test: (p: string) => /[0-9]/.test(p) },
-  { id: "special",   label: "Speciální znak (!@#$…)",    test: (p: string) => /[^A-Za-z0-9]/.test(p) },
+  {
+    id: "length",
+    label: "Alespoň 8 znaků",
+    test: (p: string) => p.length >= 8,
+  },
+  {
+    id: "uppercase",
+    label: "Velké písmeno",
+    test: (p: string) => /[A-Z]/.test(p),
+  },
+  {
+    id: "lowercase",
+    label: "Malé písmeno",
+    test: (p: string) => /[a-z]/.test(p),
+  },
+  { id: "number", label: "Číslo", test: (p: string) => /[0-9]/.test(p) },
+  {
+    id: "special",
+    label: "Speciální znak (!@#$…)",
+    test: (p: string) => /[^A-Za-z0-9]/.test(p),
+  },
 ] as const;
 
 function getStrength(password: string): number {
   return REQUIREMENTS.filter((r) => r.test(password)).length;
 }
 
-const STRENGTH_LABELS = ["", "Velmi slabé", "Slabé", "Dobré", "Silné", "Výborné"];
+const STRENGTH_LABELS = [
+  "",
+  "Velmi slabé",
+  "Slabé",
+  "Dobré",
+  "Silné",
+  "Výborné",
+];
 const STRENGTH_COLORS = [
   "bg-border",
   "bg-destructive",
@@ -47,12 +70,13 @@ export default function RegisterPage() {
   const [showConfirm, setShowConfirm] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [passwordTouched, setPasswordTouched] = useState(false);
 
   const strength = useMemo(() => getStrength(password), [password]);
   const metRequirements = useMemo(
     () => REQUIREMENTS.map((r) => ({ ...r, met: r.test(password) })),
-    [password]
+    [password],
   );
 
   async function handleSubmit(e: React.FormEvent) {
@@ -86,14 +110,23 @@ export default function RegisterPage() {
       return;
     }
 
+    // With email confirmation enabled, signUp returns no session — the user
+    // must confirm before they can sign in. Show a clear message instead of
+    // sending them into a gated onboarding flow.
+    if (!data.session) {
+      setLoading(false);
+      setNotice(
+        "Účet byl vytvořen. Potvrďte prosím registraci v e-mailu a poté se přihlaste.",
+      );
+      return;
+    }
+
     await new Promise((r) => setTimeout(r, 350));
-    await navigate("/dashboard");
+    await navigate("/onboarding");
   }
 
   return (
-    <div
-      className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden"
-    >
+    <div className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden">
       <AuthBackgroundCards />
 
       {/* Top-left logo */}
@@ -103,7 +136,10 @@ export default function RegisterPage() {
 
       {/* Card */}
       <div className="z-10 flex w-full max-w-sm flex-col px-4">
-        <Card className="w-full gap-0 border-border/60 py-0 shadow-2xl" style={{ background: 'oklch(0.19 0.008 78)' }}>
+        <Card
+          className="w-full gap-0 border-border/60 py-0 shadow-2xl"
+          style={{ background: "oklch(0.19 0.008 78)" }}
+        >
           <div className="flex flex-col gap-5 p-8">
             <div className="flex flex-col gap-1">
               <h1 className="text-xl font-semibold tracking-tight text-foreground">
@@ -163,7 +199,11 @@ export default function RegisterPage() {
                     className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground transition-colors hover:text-foreground focus:outline-none"
                     aria-label={showPassword ? "Skrýt heslo" : "Zobrazit heslo"}
                   >
-                    {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                    {showPassword ? (
+                      <EyeOff className="size-4" />
+                    ) : (
+                      <Eye className="size-4" />
+                    )}
                   </button>
                 </div>
 
@@ -197,7 +237,9 @@ export default function RegisterPage() {
 
                       {/* Label */}
                       <div className="flex items-center justify-between">
-                        <span className="text-xs text-muted-foreground">Síla hesla</span>
+                        <span className="text-xs text-muted-foreground">
+                          Síla hesla
+                        </span>
                         <AnimatePresence mode="wait">
                           <motion.span
                             key={strength}
@@ -206,11 +248,15 @@ export default function RegisterPage() {
                             exit={{ opacity: 0, y: -4 }}
                             transition={{ duration: 0.15 }}
                             className={`text-xs font-medium ${
-                              strength <= 1 ? "text-destructive" :
-                              strength === 2 ? "text-orange-500" :
-                              strength === 3 ? "text-yellow-400" :
-                              strength === 4 ? "text-lime-500" :
-                              "text-emerald-500"
+                              strength <= 1
+                                ? "text-destructive"
+                                : strength === 2
+                                  ? "text-orange-500"
+                                  : strength === 3
+                                    ? "text-yellow-400"
+                                    : strength === 4
+                                      ? "text-lime-500"
+                                      : "text-emerald-500"
                             }`}
                           >
                             {STRENGTH_LABELS[strength]}
@@ -227,13 +273,18 @@ export default function RegisterPage() {
                             animate={{ opacity: req.met ? 1 : 0.5 }}
                             transition={{ duration: 0.2 }}
                           >
-                            <span className={`flex size-3.5 items-center justify-center rounded-full transition-colors duration-200 ${req.met ? "bg-emerald-500/20 text-emerald-500" : "bg-border/50 text-muted-foreground"}`}>
-                              {req.met
-                                ? <Check className="size-2.5 stroke-[3]" />
-                                : <X className="size-2.5 stroke-[2.5]" />
-                              }
+                            <span
+                              className={`flex size-3.5 items-center justify-center rounded-full transition-colors duration-200 ${req.met ? "bg-emerald-500/20 text-emerald-500" : "bg-border/50 text-muted-foreground"}`}
+                            >
+                              {req.met ? (
+                                <Check className="size-2.5 stroke-[3]" />
+                              ) : (
+                                <X className="size-2.5 stroke-[2.5]" />
+                              )}
                             </span>
-                            <span className="text-xs text-muted-foreground">{req.label}</span>
+                            <span className="text-xs text-muted-foreground">
+                              {req.label}
+                            </span>
                           </motion.li>
                         ))}
                       </ul>
@@ -264,7 +315,11 @@ export default function RegisterPage() {
                     className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground transition-colors hover:text-foreground focus:outline-none"
                     aria-label={showConfirm ? "Skrýt heslo" : "Zobrazit heslo"}
                   >
-                    {showConfirm ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                    {showConfirm ? (
+                      <EyeOff className="size-4" />
+                    ) : (
+                      <Eye className="size-4" />
+                    )}
                   </button>
                 </div>
                 <AnimatePresence>
@@ -283,7 +338,22 @@ export default function RegisterPage() {
                 </AnimatePresence>
               </div>
 
-              <Button type="submit" className="w-full" disabled={loading}>
+              <AnimatePresence>
+                {notice && (
+                  <motion.p
+                    key="notice"
+                    initial={{ opacity: 0, y: -4 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -4 }}
+                    transition={{ duration: 0.15 }}
+                    className="rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-300"
+                  >
+                    {notice}
+                  </motion.p>
+                )}
+              </AnimatePresence>
+
+              <Button type="submit" className="w-full" disabled={loading || !!notice}>
                 <AnimatePresence mode="wait" initial={false}>
                   {loading ? (
                     <motion.span

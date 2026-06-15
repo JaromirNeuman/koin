@@ -126,4 +126,50 @@
     @apply bg-background text-foreground;
     font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
   }
+  /* Interactive elements get a pointer cursor */
+  button:not(:disabled),
+  label[for],
+  summary,
+  [role="button"]:not([aria-disabled="true"]) {
+    cursor: pointer;
+  }
+}
+
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+/* Shimmering "thinking" text */
+@keyframes text-shimmer {
+  0%   { background-position: 150% center; }
+  100% { background-position: -150% center; }
+}
+.text-shimmer {
+  background: linear-gradient(
+    90deg,
+    var(--muted-foreground) 0%,
+    var(--muted-foreground) 35%,
+    var(--foreground) 50%,
+    var(--muted-foreground) 65%,
+    var(--muted-foreground) 100%
+  );
+  background-size: 200% auto;
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  animation: text-shimmer 1.8s linear infinite;
+}
+
+/* Edit-mode "widget canvas" — subtle dotted grid behind draggable widgets */
+.widget-canvas {
+  background-image: radial-gradient(
+    circle at center,
+    color-mix(in oklab, var(--foreground) 12%, transparent) 1px,
+    transparent 1px
+  );
+  background-size: 22px 22px;
+  border-radius: var(--radius-xl);
 }

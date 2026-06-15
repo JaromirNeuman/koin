@@ -13,7 +13,7 @@ import {
   TransitionLink,
 } from "@/components/layout/page-transition";
 import { AuthBackgroundCards } from "@/components/layout/auth-bg-cards";
-import { createClient } from "@/lib/supabase/client";
+import { createClient } from "@/lib/supabase/client"
 
 export default function LoginPage() {
   const { navigate } = usePageTransition();
@@ -34,7 +34,7 @@ export default function LoginPage() {
     });
 
     if (error) {
-      alert(error.message); 
+      alert(error.message);
       setLoading(false);
       return;
     }
