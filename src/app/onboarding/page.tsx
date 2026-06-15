@@ -21,7 +21,6 @@ import { AuthBackgroundCards } from "@/components/layout/auth-bg-cards";
 import { usePageTransition } from "@/components/layout/page-transition";
 import { useToast } from "@/components/ui/toast";
 import { createClient } from "@/lib/supabase/client";
-import { readProfile, writeProfile } from "@/lib/profile";
 import { cn } from "@/lib/utils";
 
 const CURRENCIES = [
@@ -51,8 +50,8 @@ export default function OnboardingPage() {
   const [dir, setDir] = useState(1);
   const [saving, setSaving] = useState(false);
 
-  const [name, setName] = useState(() => readProfile().name);
-  const [currency, setCurrency] = useState(() => readProfile().currency || "CZK");
+  const [name, setName] = useState("");
+  const [currency, setCurrency] = useState("CZK");
   const [income, setIncome] = useState("");
   const [categories, setCategories] = useState<string[]>([
     "Jídlo",
@@ -61,16 +60,8 @@ export default function OnboardingPage() {
     "Úspory",
   ]);
 
-  // If onboarding is already done, skip straight to the app.
+  // Prefill from the user's existing Supabase profile / auth metadata.
   useEffect(() => {
-    if (readProfile().completedAt) {
-      void navigate("/dashboard");
-    }
-  }, [navigate]);
-
-  // Prefill name from the freshly-registered account if we don't have one yet.
-  useEffect(() => {
-    if (readProfile().name) return;
     let active = true;
     (async () => {
       try {
@@ -78,10 +69,20 @@ export default function OnboardingPage() {
         const {
           data: { user },
         } = await supabase.auth.getUser();
-        const fullName = user?.user_metadata?.full_name;
-        if (active && typeof fullName === "string") setName(fullName);
+        if (!user || !active) return;
+
+        const { data } = await supabase
+          .from("users")
+          .select("full_name, currency")
+          .eq("id", user.id)
+          .maybeSingle();
+
+        if (!active) return;
+        const fullName = data?.full_name || user.user_metadata?.full_name;
+        if (typeof fullName === "string" && fullName) setName(fullName);
+        if (data?.currency) setCurrency(String(data.currency));
       } catch {
-        /* offline / no session — fine, user can type a name */
+        /* no session — middleware should prevent this, but degrade gracefully */
       }
     })();
     return () => {
@@ -106,18 +107,29 @@ export default function OnboardingPage() {
   async function finish() {
     setSaving(true);
 
-    // Best-effort backend persistence: profile fields + seed the chosen categories.
     try {
       const supabase = createClient();
       const {
         data: { user },
       } = await supabase.auth.getUser();
       if (user) {
+        // Known columns.
         await supabase
           .from("users")
           .update({ currency, full_name: name.trim() })
           .eq("id", user.id);
 
+        // Optional column — isolated so a missing column can't block the rest.
+        try {
+          await supabase
+            .from("users")
+            .update({ monthly_income: income ? Number(income) : null })
+            .eq("id", user.id);
+        } catch {
+          /* monthly_income column may not exist */
+        }
+
+        // Seed chosen categories (skip ones that already exist).
         if (categories.length > 0) {
           const { data: existing } = await supabase
             .from("categories")
@@ -126,30 +138,23 @@ export default function OnboardingPage() {
           const have = new Set((existing ?? []).map((c: { name: string }) => c.name));
           const toInsert = categories
             .filter((c) => !have.has(c))
-            .map((name) => ({ name, user_id: user.id }));
+            .map((catName) => ({ name: catName, user_id: user.id }));
           if (toInsert.length > 0) {
             await supabase.from("categories").insert(toInsert);
           }
         }
+
+        window.dispatchEvent(new CustomEvent("koin-profile-change"));
       }
     } catch {
-      /* swallow — we still keep a local copy below */
+      /* non-fatal — proceed to the app regardless */
     }
-
-    writeProfile({
-      name: name.trim(),
-      currency,
-      monthlyIncome: income ? Number(income) : null,
-      categories,
-      completedAt: new Date().toISOString(),
-    });
 
     success("Vše je připraveno!", "Váš účet je nastavený.");
     await navigate("/dashboard");
   }
 
   async function skip() {
-    writeProfile({ completedAt: new Date().toISOString() });
     await navigate("/dashboard");
   }
 

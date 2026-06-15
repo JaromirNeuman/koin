@@ -21,7 +21,6 @@ import { RevealGroup, RevealItem } from "@/components/ui/reveal";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PageHeader } from "@/components/layout/page-header";
 import { useToast } from "@/components/ui/toast";
-import { readProfile, writeProfile } from "@/lib/profile";
 import { createClient } from "@/lib/supabase/client";
 import { downloadFile, parseCSV, toCSV } from "@/lib/csv";
 import { normalizeTransactionAmount } from "@/lib/money";
@@ -105,40 +104,66 @@ export default function SettingsPage() {
   const [modal, setModal] = useState<SettingsModal>(null);
   const { success } = useToast();
 
-  const [name, setName] = useState(() => readProfile().name);
-  const [currency, setCurrency] = useState(() => readProfile().currency || "CZK");
-  const [income, setIncome] = useState(() => {
-    const v = readProfile().monthlyIncome;
-    return v ? String(v) : "";
-  });
+  const [name, setName] = useState("");
+  const [currency, setCurrency] = useState("CZK");
+  const [income, setIncome] = useState("");
   const [saving, setSaving] = useState(false);
 
+  // Load profile from Supabase.
   useEffect(() => {
-    const timeout = window.setTimeout(() => setLoading(false), 550);
-    return () => window.clearTimeout(timeout);
+    async function load() {
+      try {
+        const supabase = createClient();
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+        if (user) {
+          const { data } = await supabase
+            .from("users")
+            .select("*")
+            .eq("id", user.id)
+            .maybeSingle();
+          if (data) {
+            setName(data.full_name ?? "");
+            setCurrency((data.currency as string) || "CZK");
+            if (data.monthly_income != null) setIncome(String(data.monthly_income));
+          }
+        }
+      } catch {
+        /* keep defaults */
+      } finally {
+        setLoading(false);
+      }
+    }
+    load();
   }, []);
 
   async function saveProfile() {
     setSaving(true);
-    writeProfile({
-      name: name.trim(),
-      currency,
-      monthlyIncome: income ? Number(income) : null,
-    });
-
     try {
       const supabase = createClient();
       const {
         data: { user },
       } = await supabase.auth.getUser();
       if (user) {
+        // Known columns — must succeed together.
         await supabase
           .from("users")
           .update({ full_name: name.trim(), currency })
           .eq("id", user.id);
+        // Optional column — isolated so a missing column can't block the rest.
+        try {
+          await supabase
+            .from("users")
+            .update({ monthly_income: income ? Number(income) : null })
+            .eq("id", user.id);
+        } catch {
+          /* monthly_income column may not exist */
+        }
+        window.dispatchEvent(new CustomEvent("koin-profile-change"));
       }
     } catch {
-      /* offline / no session — local copy already saved */
+      /* surfaced via toast below regardless */
     }
 
     setSaving(false);
@@ -255,6 +280,7 @@ export default function SettingsPage() {
 
       <ImportDialog
         open={modal === "import"}
+        currency={currency}
         onClose={() => setModal(null)}
         onImported={(count) =>
           success("Import dokončen", `Uloženo ${count} transakcí. Najdeš je v sekci Transakce.`)
@@ -267,6 +293,7 @@ export default function SettingsPage() {
       />
       <ReportDialog
         open={modal === "annual-report"}
+        currency={currency}
         onClose={() => setModal(null)}
         onCreated={() => success("Report vytvořen", "Souhrn byl stažen jako JSON.")}
       />
@@ -283,10 +310,12 @@ const FIELD_GUESS: Record<"date" | "name" | "amount", RegExp> = {
 
 function ImportDialog({
   open,
+  currency,
   onClose,
   onImported,
 }: {
   open: boolean;
+  currency: string;
   onClose: () => void;
   onImported: (count: number) => void;
 }) {
@@ -384,12 +413,11 @@ function ImportDialog({
         return;
       }
 
-      const currency = readProfile().currency || "CZK";
       const payload = rows.map((r) => ({
         name: r.name,
         date: r.date,
         amount: r.amount,
-        currency,
+        currency: currency || "CZK",
         user_id: user.id,
         transaction_type: r.type,
         category_id: null,
@@ -603,10 +631,12 @@ function ExportDialog({
 // ─── Annual report ───────────────────────────────────────────────────────────────
 function ReportDialog({
   open,
+  currency,
   onClose,
   onCreated,
 }: {
   open: boolean;
+  currency: string;
   onClose: () => void;
   onCreated: () => void;
 }) {
@@ -625,7 +655,7 @@ function ReportDialog({
 
     const report = {
       year,
-      currency: readProfile().currency,
+      currency,
       generatedAt: new Date().toISOString(),
       totals: { income, expenses, net: income - expenses },
       byCategory,

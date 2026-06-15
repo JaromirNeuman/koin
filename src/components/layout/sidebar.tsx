@@ -12,7 +12,6 @@ import {
 } from "lucide-react";
 import { KoinLogo } from "@/components/koin-logo";
 import { usePageTransition } from "@/components/layout/page-transition";
-import { useProfile } from "@/lib/profile";
 import { createClient } from "@/lib/supabase/client";
 import { Profile } from "@/types";
 import { cn } from "@/lib/utils";
@@ -37,7 +36,6 @@ export { NAV };
 export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
   const { navigate } = usePageTransition();
-  const localProfile = useProfile();
   const [profile, setProfile] = useState<Profile | null>(null);
 
   useEffect(() => {
@@ -64,6 +62,10 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
       }
     }
     loadUserData();
+
+    const onChange = () => loadUserData();
+    window.addEventListener("koin-profile-change", onChange);
+    return () => window.removeEventListener("koin-profile-change", onChange);
   }, []);
 
   async function handleLogout() {
@@ -77,8 +79,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
     onNavigate?.();
   }
 
-  // Supabase profile takes priority; otherwise fall back to the local onboarding profile.
-  const displayName = profile?.full_name || localProfile.name || "Uživatel";
+  const displayName = profile?.full_name || "Uživatel";
 
   return (
     <aside className="flex h-full w-60 shrink-0 flex-col border-r border-border/50 bg-card/70 px-3 py-5 backdrop-blur">
