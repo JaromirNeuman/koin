@@ -8,13 +8,10 @@ import {
   Send,
   Sparkles,
   TrendingUp,
-  User,
   WalletCards,
 } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { RevealGroup, RevealItem } from "@/components/ui/reveal";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AiBlob } from "@/components/ui/ai-blob";
@@ -475,42 +472,18 @@ export default function AiPage() {
     sendMessage(input);
   }
 
+  const showHero = messages.length <= 1 && !thinking && !streaming;
+
   return (
-    <div className="mx-auto flex min-h-full w-full max-w-7xl flex-col gap-5 px-4 py-5 sm:gap-6 sm:px-6 sm:py-7 lg:px-10">
+    <div className="relative mx-auto flex min-h-full w-full max-w-7xl flex-col gap-5 px-4 py-5 sm:gap-6 sm:px-6 sm:py-7 lg:px-10">
+      {/* ambient backdrop */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 -top-10 -z-10 mx-auto h-72 max-w-3xl rounded-full bg-emerald-500/[0.07] blur-[100px]"
+      />
       <PageHeader
         title="AI Přehled"
-        subtitle="Osobní finanční asistent nad vašimi transakcemi"
-        actions={
-          <div
-            className={cn(
-              "flex items-center gap-2 rounded-full border px-3 py-1.5 text-[12px] font-medium transition-colors",
-              busy
-                ? "border-indigo-400/20 bg-indigo-500/10 text-indigo-300"
-                : "border-emerald-400/20 bg-emerald-500/10 text-emerald-300",
-            )}
-          >
-            <span className="relative flex size-1.5">
-              <motion.span
-                className={cn(
-                  "absolute inline-flex size-full rounded-full",
-                  busy ? "bg-indigo-300" : "bg-emerald-300",
-                )}
-                animate={{
-                  opacity: [0.4, 1, 0.4],
-                  scale: busy ? [1, 1.6, 1] : 1,
-                }}
-                transition={{ duration: 1.2, repeat: Infinity }}
-              />
-              <span
-                className={cn(
-                  "relative inline-flex size-1.5 rounded-full",
-                  busy ? "bg-indigo-300" : "bg-emerald-300",
-                )}
-              />
-            </span>
-            {busy ? "Píše…" : "Připraveno"}
-          </div>
-        }
+        subtitle="Tvůj finanční parťák"
       />
 
       {loading ? (
@@ -535,65 +508,106 @@ export default function AiPage() {
       ) : (
         <RevealGroup className="grid min-h-[520px] flex-1 gap-5 xl:grid-cols-[1fr_340px]">
           <RevealItem className="min-h-0">
-            <Card className="h-full min-h-0 gap-0 overflow-hidden ring-1 ring-foreground/[0.08] shadow-[0_10px_30px_-18px_rgba(0,0,0,0.7)]">
-              <div className="flex items-center justify-between border-b border-border/60 px-5 py-4">
-                <div className="flex items-center gap-2.5">
-                  <AiBlob size={32} />
-                  <div>
-                    <h2 className="text-[14px] font-semibold leading-tight text-foreground">
-                      Koin AI
-                    </h2>
-                    <p className="text-[11px] text-muted-foreground">
-                      {busy ? "přemýšlí…" : "online · odpoví okamžitě"}
-                    </p>
-                  </div>
+            <div className="relative flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border border-white/[0.06] bg-gradient-to-b from-card/80 to-card/40 shadow-[0_24px_70px_-40px_rgba(0,0,0,0.85)] backdrop-blur-xl">
+              {/* ambient glow */}
+              <div
+                aria-hidden
+                className="pointer-events-none absolute -top-24 left-1/2 h-44 w-2/3 -translate-x-1/2 rounded-full bg-emerald-500/10 blur-3xl"
+              />
+
+              {/* header */}
+              <div className="relative flex items-center gap-3 px-5 py-4">
+                <AiBlob size={36} />
+                <div className="min-w-0">
+                  <h2 className="text-[14px] font-semibold leading-tight text-foreground">
+                    Koin AI
+                  </h2>
+                  <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                    <span
+                      className={cn(
+                        "size-1.5 rounded-full",
+                        busy ? "bg-indigo-400" : "bg-emerald-400",
+                      )}
+                    />
+                    {busy ? "přemýšlí…" : "online"}
+                  </p>
                 </div>
               </div>
 
-              <div className="flex min-h-0 flex-1 flex-col">
-                <div className="flex-1 space-y-4 overflow-auto px-5 py-5">
-                  {messages.map((message, index) => {
-                    const assistant = message.role === "assistant";
-
-                    return (
+              {/* conversation */}
+              <div className="relative flex min-h-0 flex-1 flex-col">
+                <div className="flex-1 space-y-5 overflow-auto px-4 py-2 sm:px-6">
+                  {showHero ? (
+                    <div className="flex h-full flex-col items-center justify-center gap-6 py-6 text-center">
                       <motion.div
-                        key={index}
-                        layout
-                        initial={{ opacity: 0, y: 10, scale: 0.97 }}
-                        animate={{ opacity: 1, y: 0, scale: 1 }}
-                        transition={{
-                          type: "spring",
-                          stiffness: 460,
-                          damping: 32,
-                        }}
-                        className={cn(
-                          "flex gap-3",
-                          assistant ? "justify-start" : "justify-end",
-                        )}
+                        initial={{ opacity: 0, scale: 0.8 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        transition={{ type: "spring", stiffness: 200, damping: 18 }}
                       >
-                        {assistant && <AiBlob size={32} className="mt-0.5" />}
-                        <div
+                        <AiBlob size={88} />
+                      </motion.div>
+                      <div className="space-y-1.5">
+                        <h3 className="text-lg font-semibold tracking-tight text-foreground">
+                          Ahoj 👋 Jak ti pomůžu s penězi?
+                        </h3>
+                        <p className="mx-auto max-w-sm text-[13px] leading-relaxed text-muted-foreground">
+                          {recommendation}
+                        </p>
+                      </div>
+                      <div className="grid w-full max-w-md grid-cols-1 gap-2 sm:grid-cols-2">
+                        {PROMPTS.map(({ label, icon: Icon }, i) => (
+                          <motion.button
+                            key={label}
+                            onClick={() => sendMessage(label)}
+                            initial={{ opacity: 0, y: 8 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: 0.1 + i * 0.05 }}
+                            whileHover={{ y: -2 }}
+                            whileTap={{ scale: 0.97 }}
+                            className="group flex items-center gap-2.5 rounded-xl border border-white/[0.06] bg-secondary/30 px-3.5 py-3 text-left text-[13px] text-foreground transition-colors hover:border-emerald-400/30 hover:bg-secondary/60"
+                          >
+                            <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-emerald-500/12 text-emerald-400 transition-transform group-hover:scale-110">
+                              <Icon className="size-3.5" />
+                            </span>
+                            {label}
+                          </motion.button>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    messages.map((message, index) => {
+                      const assistant = message.role === "assistant";
+                      return (
+                        <motion.div
+                          key={index}
+                          layout
+                          initial={{ opacity: 0, y: 12 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ type: "spring", stiffness: 460, damping: 34 }}
                           className={cn(
-                            "max-w-[78%] rounded-2xl px-4 py-3 text-[13px] leading-5 shadow-sm",
-                            assistant
-                              ? "rounded-tl-sm border border-border/70 bg-secondary/40 text-foreground"
-                              : "rounded-tr-sm bg-primary text-primary-foreground",
+                            "flex items-end gap-2.5",
+                            assistant ? "justify-start" : "justify-end",
                           )}
                         >
-                          {assistant ? (
-                            <Markdown content={message.content} />
-                          ) : (
-                            message.content
-                          )}
-                        </div>
-                        {!assistant && (
-                          <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-indigo-500 text-white">
-                            <User className="size-4" />
-                          </span>
-                        )}
-                      </motion.div>
-                    );
-                  })}
+                          {assistant && <AiBlob size={26} className="mb-0.5" />}
+                          <div
+                            className={cn(
+                              "max-w-[82%] px-4 py-2.5 text-[13.5px] leading-relaxed",
+                              assistant
+                                ? "rounded-2xl rounded-bl-md bg-secondary/55 text-foreground ring-1 ring-white/[0.04]"
+                                : "rounded-2xl rounded-br-md bg-gradient-to-br from-primary to-primary/80 text-primary-foreground shadow-md",
+                            )}
+                          >
+                            {assistant ? (
+                              <Markdown content={message.content} />
+                            ) : (
+                              message.content
+                            )}
+                          </div>
+                        </motion.div>
+                      );
+                    })
+                  )}
 
                   <AnimatePresence>
                     {thinking && (
@@ -602,10 +616,10 @@ export default function AiPage() {
                         initial={{ opacity: 0, y: 8 }}
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: -6 }}
-                        className="flex gap-3"
+                        className="flex items-end gap-2.5"
                       >
-                        <AiBlob size={32} className="mt-0.5" />
-                        <div className="flex items-center rounded-2xl rounded-tl-sm border border-border/70 bg-secondary/40 px-4 py-3">
+                        <AiBlob size={26} className="mb-0.5" />
+                        <div className="rounded-2xl rounded-bl-md bg-secondary/55 px-4 py-3 ring-1 ring-white/[0.04]">
                           <span className="text-shimmer text-[13px] font-medium">
                             přemýšlí…
                           </span>
@@ -625,7 +639,7 @@ export default function AiPage() {
                           animate={{ opacity: 1, y: 0 }}
                           exit={{ opacity: 0, y: 6 }}
                           transition={{ duration: 0.25 }}
-                          className="flex flex-wrap gap-2 pl-11"
+                          className="flex flex-wrap gap-2 pl-[34px]"
                         >
                           {suggestFollowUps(lastMessage.content).map((s, i) => (
                             <motion.button
@@ -634,10 +648,11 @@ export default function AiPage() {
                               initial={{ opacity: 0, scale: 0.92 }}
                               animate={{ opacity: 1, scale: 1 }}
                               transition={{ delay: i * 0.06 }}
+                              whileHover={{ y: -1 }}
                               whileTap={{ scale: 0.94 }}
-                              className="inline-flex items-center gap-1.5 rounded-full border border-primary/25 bg-primary/5 px-3 py-1.5 text-[12px] text-foreground/80 transition-colors hover:border-primary/40 hover:bg-primary/10 hover:text-foreground"
+                              className="inline-flex items-center gap-1.5 rounded-full border border-emerald-400/20 bg-emerald-500/[0.06] px-3 py-1.5 text-[12px] text-foreground/80 transition-colors hover:border-emerald-400/40 hover:bg-emerald-500/10 hover:text-foreground"
                             >
-                              <Sparkles className="size-3 text-primary" />
+                              <Sparkles className="size-3 text-emerald-400" />
                               {s}
                             </motion.button>
                           ))}
@@ -648,94 +663,90 @@ export default function AiPage() {
                   <div ref={bottomRef} />
                 </div>
 
-                <div className="border-t border-border/60 px-5 py-4">
-                  <div className="mb-3 flex flex-wrap gap-2">
-                    {PROMPTS.map(({ label, icon: Icon }) => (
-                      <motion.button
-                        key={label}
-                        onClick={() => sendMessage(label)}
-                        disabled={busy}
-                        whileTap={{ scale: 0.94 }}
-                        className="inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-secondary/35 px-3 py-1.5 text-[12px] text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        <Icon className="size-3.5" />
-                        {label}
-                      </motion.button>
-                    ))}
-                  </div>
-                  <form onSubmit={handleSubmit} className="flex gap-2">
-                    <Input
-                      className="h-10"
+                {/* input */}
+                <div className="relative px-4 pb-4 pt-2 sm:px-6">
+                  <form
+                    onSubmit={handleSubmit}
+                    className="flex items-center gap-2 rounded-2xl border border-white/[0.08] bg-secondary/40 py-1.5 pl-4 pr-1.5 shadow-lg transition-colors focus-within:border-emerald-400/40 focus-within:bg-secondary/60"
+                  >
+                    <input
                       value={input}
                       onChange={(e) => setInput(e.target.value)}
-                      placeholder="Zeptejte se na rozpočet, výdaje nebo úspory..."
+                      placeholder="Zeptej se na rozpočet, výdaje nebo úspory…"
                       disabled={busy}
+                      className="min-w-0 flex-1 bg-transparent text-[13.5px] text-foreground outline-none placeholder:text-muted-foreground disabled:opacity-60"
                     />
-                    <Button
-                      className="h-10 w-11"
+                    <motion.button
+                      type="submit"
                       aria-label="Odeslat zprávu"
                       disabled={busy || !input.trim()}
+                      whileTap={{ scale: 0.9 }}
+                      className="grid size-9 shrink-0 place-items-center rounded-xl bg-primary text-primary-foreground transition-opacity disabled:opacity-40"
                     >
                       {busy ? (
                         <Loader2 className="size-4 animate-spin" />
                       ) : (
                         <Send className="size-4" />
                       )}
-                    </Button>
+                    </motion.button>
                   </form>
                 </div>
               </div>
-            </Card>
+            </div>
           </RevealItem>
 
           <div className="flex flex-col gap-5">
             <RevealItem>
-              <Card className="px-5 py-5 ring-1 ring-foreground/[0.08]">
-                <div className="flex items-center gap-2">
-                  <Sparkles className="size-4 text-primary" />
-                  <h2 className="text-[15px] font-semibold text-foreground">
+              <div className="overflow-hidden rounded-2xl border border-white/[0.06] bg-card/60 backdrop-blur-xl">
+                <div className="flex items-center gap-2 px-5 pt-5">
+                  <Sparkles className="size-4 text-emerald-400" />
+                  <h2 className="text-[14px] font-semibold text-foreground">
                     Rychlé insighty
                   </h2>
                 </div>
-                <div className="grid gap-3">
-                  {latestInsight.length === 0 ? (
-                    <p className="rounded-lg border border-dashed border-border/60 bg-secondary/20 px-3 py-4 text-[13px] text-muted-foreground">
-                      Zatím žádná data tento měsíc. Přidejte transakce a uvidíte živé přehledy.
-                    </p>
-                  ) : (
-                    latestInsight.map((item, i) => (
+                {latestInsight.length === 0 ? (
+                  <p className="px-5 pb-5 pt-3 text-[13px] leading-relaxed text-muted-foreground">
+                    Zatím žádná data tento měsíc. Přidej transakce a uvidíš živé přehledy.
+                  </p>
+                ) : (
+                  <div className="mt-3 divide-y divide-border/40">
+                    {latestInsight.map((item, i) => (
                       <motion.div
                         key={item.label}
                         initial={{ opacity: 0, x: 8 }}
                         animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: 0.1 + i * 0.07 }}
-                        className="rounded-lg border border-border/60 bg-secondary/30 px-3 py-3 transition-colors hover:border-foreground/15 hover:bg-secondary/50"
+                        transition={{ delay: 0.1 + i * 0.06 }}
+                        className="flex items-center justify-between gap-3 px-5 py-3 transition-colors hover:bg-secondary/30"
                       >
-                        <p className="text-[11px] uppercase tracking-wider text-muted-foreground">
+                        <span className="text-[12px] text-muted-foreground">
                           {item.label}
-                        </p>
-                        <p className="mt-1 text-[15px] font-semibold text-foreground">
+                        </span>
+                        <span className="text-[14px] font-semibold tabular-nums text-foreground">
                           {item.value}
-                        </p>
+                        </span>
                       </motion.div>
-                    ))
-                  )}
-                </div>
-              </Card>
+                    ))}
+                  </div>
+                )}
+              </div>
             </RevealItem>
 
             <RevealItem>
-              <Card className="px-5 py-5 ring-1 ring-foreground/[0.08]">
-                <div className="flex items-center gap-2">
-                  <CalendarClock className="size-4 text-primary" />
-                  <h2 className="text-[15px] font-semibold text-foreground">
+              <div className="relative overflow-hidden rounded-2xl border border-emerald-400/15 bg-gradient-to-br from-emerald-500/[0.08] via-card/40 to-card/40 p-5">
+                <div
+                  aria-hidden
+                  className="pointer-events-none absolute -right-8 -top-8 size-24 rounded-full bg-emerald-500/15 blur-2xl"
+                />
+                <div className="relative flex items-center gap-2">
+                  <CalendarClock className="size-4 text-emerald-400" />
+                  <h2 className="text-[14px] font-semibold text-foreground">
                     Doporučení týdne
                   </h2>
                 </div>
-                <p className="text-[13px] leading-5 text-muted-foreground">
+                <p className="relative mt-2 text-[13px] leading-relaxed text-muted-foreground">
                   {recommendation}
                 </p>
-              </Card>
+              </div>
             </RevealItem>
           </div>
         </RevealGroup>
