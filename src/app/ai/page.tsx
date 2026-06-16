@@ -20,6 +20,7 @@ import { createClient } from "@/lib/supabase/client";
 import { formatMoney } from "@/lib/money";
 import { useProfileCurrency } from "@/lib/use-profile-currency";
 import { cn } from "@/lib/utils";
+import { catName, suggestFollowUps } from "./ai-utils";
 
 type Message = {
   role: "assistant" | "user";
@@ -36,16 +37,6 @@ type FinanceSummary = {
   monthLabel: string;
   hasData: boolean;
 };
-
-function catName(categories: unknown): string {
-  if (Array.isArray(categories)) {
-    const f = categories[0];
-    return f && typeof f === "object" && "name" in f ? String(f.name) : "Bez kategorie";
-  }
-  return categories && typeof categories === "object" && "name" in categories
-    ? String((categories as { name: string }).name)
-    : "Bez kategorie";
-}
 
 // ─── Minimal markdown rendering (bold / italic / code / lists) ───────────────────
 function renderInline(text: string, keyPrefix: string): React.ReactNode[] {
@@ -147,26 +138,6 @@ function Markdown({ content }: { content: string }) {
       })}
     </div>
   );
-}
-
-// ─── Contextual follow-up suggestions ───────────────────────────────────────────
-function suggestFollowUps(text: string): string[] {
-  const t = text.toLowerCase();
-  if (t.includes("limit"))
-    return [
-      "Nastav konkrétní limity",
-      "Kolik ušetřím za 3 měsíce?",
-      "Co když limit překročím?",
-    ];
-  if (t.includes("rozpoč"))
-    return [
-      "Uprav rozpočet na úspory 50 %",
-      "Přidej rezervu na auto",
-      "Kde nejvíc utrácím?",
-    ];
-  if (t.includes("zůstat") || t.includes("předpov") || t.includes("březn"))
-    return ["Jak zrychlit růst zůstatku?", "Naplánuj rozpočet", "Kde ušetřím?"];
-  return ["Kde ušetřím?", "Naplánuj rozpočet", "Předpověď zůstatku"];
 }
 
 const STARTER_MESSAGES: Message[] = [

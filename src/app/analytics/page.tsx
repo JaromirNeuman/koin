@@ -24,6 +24,7 @@ import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 import { formatMoney } from "@/lib/money";
 import { useProfileCurrency } from "@/lib/use-profile-currency";
+import { getCategoryName } from "./analytics-utils";
 
 type AggregatedExpense = { name: string; value: number };
 type MonthlyData = {
@@ -32,21 +33,6 @@ type MonthlyData = {
   expenses: number;
   savings: number;
 };
-
-function getCategoryName(categories: unknown) {
-  if (Array.isArray(categories)) {
-    const first = categories[0];
-    return typeof first === "object" && first !== null && "name" in first
-      ? String(first.name)
-      : "Bez kategorie";
-  }
-
-  return typeof categories === "object" &&
-    categories !== null &&
-    "name" in categories
-    ? String(categories.name)
-    : "Bez kategorie";
-}
 
 function MetricCard({
   label,

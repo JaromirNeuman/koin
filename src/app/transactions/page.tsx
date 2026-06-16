@@ -28,6 +28,7 @@ import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 import { formatMoney, normalizeTransactionAmount } from "@/lib/money";
 import { useProfileCurrency } from "@/lib/use-profile-currency";
+import { filterTransactions } from "./transactions-utils";
 
 type DbTransaction = {
   id: number;
@@ -261,15 +262,7 @@ export default function TransactionsPage() {
   }
 
   const searchedTransactions = useMemo(() => {
-    const normalized = query.trim().toLowerCase();
-    if (!normalized) return transactions;
-
-    return transactions.filter((tx) => {
-      const categoryName = tx.categories?.name || "Bez kategorie";
-      return [tx.name, categoryName, tx.date].some((value) =>
-        value.toLowerCase().includes(normalized),
-      );
-    });
+  return filterTransactions(transactions, query);
   }, [query, transactions]);
 
   const totalPages = useMemo(() => {

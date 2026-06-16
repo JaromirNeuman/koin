@@ -27,6 +27,7 @@ import { createClient } from "@/lib/supabase/client";
 import { downloadFile, parseCSV, toCSV } from "@/lib/csv";
 import { normalizeTransactionAmount } from "@/lib/money";
 import { SAMPLE_TRANSACTIONS } from "@/lib/sample-data";
+import { normalizeDate, parseAmount } from "./settings-utils";
 
 const CURRENCIES = [
   { code: "CZK", label: "Koruna (Kč)" },
@@ -41,30 +42,6 @@ interface FlatTx {
   name: string;
   category: string;
   amount: number;
-}
-
-// ── shared helpers ───────────────────────────────────────────────────────────────
-function normalizeDate(raw: string): string | null {
-  const s = raw.trim();
-  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
-  const m = s.match(/^(\d{1,2})[.\/](\d{1,2})[.\/](\d{2,4})/);
-  if (m) {
-    const [, d, mo] = m;
-    const y = m[3].length === 2 ? "20" + m[3] : m[3];
-    return `${y}-${mo.padStart(2, "0")}-${d.padStart(2, "0")}`;
-  }
-  const dt = new Date(s);
-  return isNaN(dt.getTime()) ? null : dt.toISOString().slice(0, 10);
-}
-
-function parseAmount(raw: string): number | null {
-  const cleaned = raw
-    .replace(/\s/g, "")
-    .replace(/[^\d,.-]/g, "")
-    .replace(/\.(?=\d{3}\b)/g, "") // drop thousand-dot
-    .replace(",", ".");
-  const n = parseFloat(cleaned);
-  return isNaN(n) ? null : n;
 }
 
 /** Real DB transactions for a range, with a demo fallback when signed-out. */
