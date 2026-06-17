@@ -40,6 +40,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { createClient } from "@/lib/supabase/client";
 import { formatMoney, normalizeTransactionAmount } from "@/lib/money";
 import { useProfileCurrency } from "@/lib/use-profile-currency";
+import { getCategoryIcon, getCategoryName } from "./dashboard-utils";
 
 // ─── Stat card ────────────────────────────────────────────────────────────────
 type Accent = "emerald" | "red" | "indigo" | "violet";
@@ -171,33 +172,6 @@ type MonthlyData = {
   savings: number;
 };
 
-function getCategoryIcon(categoryName: string) {
-  const name = categoryName.toLowerCase();
-  if (name.includes("jídlo") || name.includes("lidl"))
-    return { icon: ShoppingCart, bg: "bg-orange-500/10 text-orange-400" };
-  if (name.includes("příjem") || name.includes("výplata"))
-    return { icon: Banknote, bg: "bg-emerald-500/10 text-emerald-400" };
-  if (name.includes("zábava") || name.includes("netflix"))
-    return { icon: Tv2, bg: "bg-purple-500/10 text-purple-400" };
-  if (name.includes("bydlení") || name.includes("nájem"))
-    return { icon: Home, bg: "bg-blue-500/10 text-blue-400" };
-  return { icon: HelpCircle, bg: "bg-slate-500/10 text-slate-400" };
-}
-
-function getCategoryName(categories: unknown) {
-  if (Array.isArray(categories)) {
-    const first = categories[0];
-    return typeof first === "object" && first !== null && "name" in first
-      ? String(first.name)
-      : "Bez kategorie";
-  }
-  return typeof categories === "object" &&
-    categories !== null &&
-    "name" in categories
-    ? String(categories.name)
-    : "Bez kategorie";
-}
-
 // ─── Widget model ───────────────────────────────────────────────────────────────
 type WidgetId = "stats" | "trend" | "categories" | "transactions";
 type WidgetSize = "sm" | "lg";
@@ -236,6 +210,13 @@ export default function DashboardPage() {
   const supabase = useMemo(() => createClient(), []);
   const currency = useProfileCurrency();
 
+  const currentMonthYear = useMemo(() => {
+    const date = new Date();
+    const month = date.toLocaleString("cs-CZ", { month: "long" });
+    const capitalizedMonth = month.charAt(0).toUpperCase() + month.slice(1);
+    return `${capitalizedMonth} ${date.getFullYear()}`;
+  }, []);
+
   const [layoutReady, setLayoutReady] = useState(false);
   const [dataReady, setDataReady] = useState(false);
   const [modal, setModal] = useState<DashboardModal>(null);
@@ -254,6 +235,35 @@ export default function DashboardPage() {
   const [categories, setCategories] = useState<DbCategory[]>([]);
 
   const [donutType, setDonutType] = useState<"income" | "expense">("expense");
+
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [timeAgoText, setTimeAgoText] = useState("aktualizováno právě teď");
+
+  useEffect(() => {
+    if (!lastUpdated) return;
+
+    function updateText() {
+      const now = new Date();
+      const diffInMinutes = Math.floor(
+        (now.getTime() - lastUpdated!.getTime()) / 60000,
+      );
+
+      if (diffInMinutes < 1) {
+        setTimeAgoText("aktualizováno právě teď");
+      } else if (diffInMinutes === 1) {
+        setTimeAgoText("aktualizováno před 1 minutou");
+      } else if (diffInMinutes < 5) {
+        setTimeAgoText(`aktualizováno před ${diffInMinutes} minutami`);
+      } else {
+        setTimeAgoText(`aktualizováno před ${diffInMinutes} min`);
+      }
+    }
+
+    updateText();
+    const interval = setInterval(updateText, 60000);
+
+    return () => clearInterval(interval);
+  }, [lastUpdated]);
 
   const hydrated = useRef(false);
 
@@ -339,12 +349,12 @@ export default function DashboardPage() {
         "Feb",
         "Mar",
         "Apr",
-        "Maj",
+        "May",
         "Jun",
         "Jul",
         "Aug",
         "Sep",
-        "Okt",
+        "Oct",
         "Nov",
         "Dec",
       ];
@@ -391,6 +401,7 @@ export default function DashboardPage() {
       console.error("Chyba při stahování dat pro dashboard:", err);
     } finally {
       setDataReady(true);
+      setLastUpdated(new Date());
     }
   }, [supabase]);
 
@@ -472,12 +483,12 @@ export default function DashboardPage() {
         title="Přehled"
         subtitle={
           <>
-            Únor 2026
-            <span className="relative flex size-1.5">
+            {currentMonthYear}
+            <span className="relative flex size-1.5 ml-2 mr-1 inline-flex">
               <span className="absolute inline-flex size-full animate-ping rounded-full bg-emerald-400/70" />
               <span className="relative inline-flex size-1.5 rounded-full bg-emerald-400" />
             </span>
-            aktualizované před 2 min
+            {timeAgoText}
           </>
         }
         actions={
@@ -1129,7 +1140,7 @@ function DashboardDialogs({
               name="amount"
               type="number"
               min="0"
-              step="0.01"
+              step="any"
               placeholder="280"
               required
               disabled={submitting}

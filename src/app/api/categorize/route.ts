@@ -1,4 +1,5 @@
 import type { NextRequest } from "next/server";
+import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "edge";
 
@@ -6,6 +7,14 @@ const MODEL =
   process.env.OPENAI_MODEL ?? process.env.OPENAI_ESTIMATOR_MODEL ?? "gpt-4o-mini";
 
 export async function POST(req: NextRequest) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    return Response.json({ error: "unauthorized" }, { status: 401 });
+  }
+
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey || apiKey === "your-openai-api-key") {
     return Response.json({ error: "missing_key" }, { status: 503 });
@@ -31,7 +40,7 @@ export async function POST(req: NextRequest) {
     "Pokud žádná nesedí, navrhni novou stručnou kategorii (1–2 slova, česky, velké první písmeno, např. „Jídlo\", „Doprava\", „Zábava\"). " +
     "Nepoužívej „Bez kategorie\". " +
     'Odpověz POUZE validním JSON ve tvaru {"result":["Kategorie", ...]} se stejným počtem položek a ve stejném pořadí jako vstup. Žádný další text.';
-  const user = `Existující kategorie: ${
+  const userPrompt = `Existující kategorie: ${
     categories.length ? JSON.stringify(categories) : "(žádné)"
   }\nPopisy transakcí:\n${items.map((t, i) => `${i + 1}. ${t}`).join("\n")}`;
 
@@ -48,7 +57,7 @@ export async function POST(req: NextRequest) {
         temperature: 0,
         messages: [
           { role: "system", content: system },
-          { role: "user", content: user },
+          { role: "user", content: userPrompt },
         ],
       }),
     });
