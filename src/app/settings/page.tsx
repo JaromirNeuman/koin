@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   CheckCircle2,
   Download,
@@ -83,10 +83,46 @@ export default function SettingsPage() {
   const [modal, setModal] = useState<SettingsModal>(null);
   const { success } = useToast();
 
+  const currentMonthYear = useMemo(() => {
+    const date = new Date();
+    const month = date.toLocaleString("cs-CZ", { month: "long" });
+    const capitalizedMonth = month.charAt(0).toUpperCase() + month.slice(1);
+    return `${capitalizedMonth} ${date.getFullYear()}`;
+  }, []);
+  
   const [name, setName] = useState("");
   const [currency, setCurrency] = useState("CZK");
   const [income, setIncome] = useState("");
   const [saving, setSaving] = useState(false);
+
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [timeAgoText, setTimeAgoText] = useState("aktualizováno právě teď");
+
+  useEffect(() => {
+    if (!lastUpdated) return;
+
+    function updateText() {
+      const now = new Date();
+      const diffInMinutes = Math.floor(
+        (now.getTime() - lastUpdated!.getTime()) / 60000,
+      );
+
+      if (diffInMinutes < 1) {
+        setTimeAgoText("aktualizováno právě teď");
+      } else if (diffInMinutes === 1) {
+        setTimeAgoText("aktualizováno před 1 minutou");
+      } else if (diffInMinutes < 5) {
+        setTimeAgoText(`aktualizováno před ${diffInMinutes} minutami`);
+      } else {
+        setTimeAgoText(`aktualizováno před ${diffInMinutes} min`);
+      }
+    }
+
+    updateText();
+    const interval = setInterval(updateText, 60000);
+
+    return () => clearInterval(interval);
+  }, [lastUpdated]);
 
   // Load profile from Supabase.
   useEffect(() => {
@@ -112,6 +148,7 @@ export default function SettingsPage() {
         /* keep defaults */
       } finally {
         setLoading(false);
+        setLastUpdated(new Date());
       }
     }
     load();
@@ -146,12 +183,13 @@ export default function SettingsPage() {
     }
 
     setSaving(false);
+    setLastUpdated(new Date());
     success("Profil uložen", "Změny se projeví v celé aplikaci.");
   }
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-6 py-7 lg:px-10">
-      <PageHeader title="Nastavení" subtitle="Únor 2026 · aktualizované před 2 min" />
+      <PageHeader title="Nastavení" subtitle={`${currentMonthYear} · ${timeAgoText}`} />
 
       {loading ? (
         <div className="grid gap-5 lg:grid-cols-2">

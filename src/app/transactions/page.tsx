@@ -1089,7 +1089,7 @@ function TransactionDialogs({
         title="Smazat kategorii"
         description={
           isDeleteCategory
-            ? `Kategorie "${modal.category}" se odebere z číselníku. Backend může před smazáním zkontrolovat navázané transakce.`
+            ? `Kategorie "${modal.category.name}" se odebere z číselníku. Backend může před smazáním zkontrolovat navázané transakce.`
             : undefined
         }
         onClose={onClose}
