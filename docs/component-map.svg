@@ -1,0 +1,201 @@
+<svg viewBox="0 0 960 720" xmlns="http://www.w3.org/2000/svg" role="img" font-family="system-ui, -apple-system, sans-serif" font-size="11">
+  <title>Koin – mapa komponent</title>
+  <desc>Stromový diagram komponent a závislostí aplikace Koin (Next.js 16)</desc>
+
+  <rect width="960" height="720" fill="#0f1117"/>
+
+  <defs>
+    <marker id="arr" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
+      <path d="M0,0 L7,3.5 L0,7 Z" fill="#666" opacity="0.55"/>
+    </marker>
+    <marker id="arr-api" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
+      <path d="M0,0 L7,3.5 L0,7 Z" fill="#22c55e" opacity="0.7"/>
+    </marker>
+  </defs>
+
+  <!-- LEGEND -->
+  <g transform="translate(16,12)">
+    <rect width="10" height="10" rx="2" fill="#22c55e" opacity="0.18" stroke="#22c55e" stroke-width="1.2"/>
+    <text x="15" y="9" fill="#888" font-size="10">Pages</text>
+    <rect x="64" width="10" height="10" rx="2" fill="#1e2030" stroke="#6366f1" stroke-width="1.2" opacity="0.8"/>
+    <text x="79" y="9" fill="#888" font-size="10">Layout/Shell</text>
+    <rect x="163" width="10" height="10" rx="2" fill="none" stroke="#666" stroke-width="1" stroke-dasharray="3 2"/>
+    <text x="178" y="9" fill="#888" font-size="10">UI Components</text>
+    <rect x="289" width="10" height="10" rx="2" fill="#f59e0b" opacity="0.15" stroke="#f59e0b" stroke-width="1.2"/>
+    <text x="304" y="9" fill="#888" font-size="10">Lib / Hooks</text>
+    <rect x="370" width="10" height="10" rx="2" fill="#22c55e" opacity="0.08" stroke="#22c55e" stroke-width="1" stroke-dasharray="4 2"/>
+    <text x="385" y="9" fill="#888" font-size="10">API Routes (edge)</text>
+  </g>
+
+  <!-- ROW 0: layout.tsx + proxy.ts -->
+  <rect x="370" y="34" width="120" height="34" rx="6" fill="#1e2030" stroke="#6366f1" stroke-width="1.5" opacity="0.8"/>
+  <text x="430" y="51" text-anchor="middle" fill="#eee" font-weight="600">layout.tsx</text>
+  <text x="430" y="63" text-anchor="middle" fill="#888" font-size="9">AppShell + ToastProvider</text>
+
+  <rect x="510" y="34" width="100" height="34" rx="6" fill="#f59e0b" opacity="0.12" stroke="#f59e0b" stroke-width="1.2"/>
+  <text x="560" y="51" text-anchor="middle" fill="#eee" font-weight="600">proxy.ts</text>
+  <text x="560" y="63" text-anchor="middle" fill="#888" font-size="9">Auth middleware</text>
+
+  <!-- ROW 1: AppShell -->
+  <rect x="300" y="100" width="120" height="34" rx="6" fill="#1e2030" stroke="#6366f1" stroke-width="1.5" opacity="0.8"/>
+  <text x="360" y="117" text-anchor="middle" fill="#eee" font-weight="600">AppShell</text>
+  <text x="360" y="129" text-anchor="middle" fill="#888" font-size="9">responsive shell</text>
+
+  <line x1="430" y1="68" x2="360" y2="100" stroke="#666" stroke-width="1" opacity="0.4" marker-end="url(#arr)"/>
+
+  <!-- ROW 2: Sidebar, PageHeader, PageTransition -->
+  <rect x="160" y="170" width="120" height="34" rx="6" fill="#1e2030" stroke="#6366f1" stroke-width="1.5" opacity="0.8"/>
+  <text x="220" y="187" text-anchor="middle" fill="#eee" font-weight="600">Sidebar</text>
+  <text x="220" y="199" text-anchor="middle" fill="#888" font-size="9">nav + profile + logout</text>
+
+  <rect x="300" y="170" width="120" height="34" rx="6" fill="#1e2030" stroke="#6366f1" stroke-width="1.5" opacity="0.8"/>
+  <text x="360" y="187" text-anchor="middle" fill="#eee" font-weight="600">PageHeader</text>
+  <text x="360" y="199" text-anchor="middle" fill="#888" font-size="9">title / subtitle / actions</text>
+
+  <rect x="440" y="170" width="120" height="34" rx="6" fill="#1e2030" stroke="#6366f1" stroke-width="1.5" opacity="0.8"/>
+  <text x="500" y="187" text-anchor="middle" fill="#eee" font-weight="600">PageTransition</text>
+  <text x="500" y="199" text-anchor="middle" fill="#888" font-size="9">framer route anim</text>
+
+  <line x1="320" y1="134" x2="220" y2="170" stroke="#666" stroke-width="1" opacity="0.4" marker-end="url(#arr)"/>
+  <line x1="350" y1="134" x2="355" y2="170" stroke="#666" stroke-width="1" opacity="0.4" marker-end="url(#arr)"/>
+  <line x1="380" y1="134" x2="490" y2="170" stroke="#666" stroke-width="1" opacity="0.4" marker-end="url(#arr)"/>
+
+  <!-- ROW 3: Pages -->
+  <rect x="20" y="252" width="110" height="34" rx="6" fill="#22c55e" opacity="0.14" stroke="#22c55e" stroke-width="1.5"/>
+  <text x="75" y="269" text-anchor="middle" fill="#eee" font-weight="600">Dashboard</text>
+  <text x="75" y="281" text-anchor="middle" fill="#888" font-size="9">widgets, drag/resize</text>
+
+  <rect x="148" y="252" width="110" height="34" rx="6" fill="#22c55e" opacity="0.14" stroke="#22c55e" stroke-width="1.5"/>
+  <text x="203" y="269" text-anchor="middle" fill="#eee" font-weight="600">Transactions</text>
+  <text x="203" y="281" text-anchor="middle" fill="#888" font-size="9">CRUD + categories</text>
+
+  <rect x="276" y="252" width="110" height="34" rx="6" fill="#22c55e" opacity="0.14" stroke="#22c55e" stroke-width="1.5"/>
+  <text x="331" y="269" text-anchor="middle" fill="#eee" font-weight="600">Analytics</text>
+  <text x="331" y="281" text-anchor="middle" fill="#888" font-size="9">charts, insights</text>
+
+  <rect x="404" y="252" width="110" height="34" rx="6" fill="#22c55e" opacity="0.14" stroke="#22c55e" stroke-width="1.5"/>
+  <text x="459" y="269" text-anchor="middle" fill="#eee" font-weight="600">AI Chat</text>
+  <text x="459" y="281" text-anchor="middle" fill="#888" font-size="9">stream, hero, blob</text>
+
+  <rect x="532" y="252" width="110" height="34" rx="6" fill="#22c55e" opacity="0.14" stroke="#22c55e" stroke-width="1.5"/>
+  <text x="587" y="269" text-anchor="middle" fill="#eee" font-weight="600">Settings</text>
+  <text x="587" y="281" text-anchor="middle" fill="#888" font-size="9">profile, import/export</text>
+
+  <rect x="660" y="252" width="110" height="34" rx="6" fill="#22c55e" opacity="0.14" stroke="#22c55e" stroke-width="1.5"/>
+  <text x="715" y="269" text-anchor="middle" fill="#eee" font-weight="600">Auth</text>
+  <text x="715" y="281" text-anchor="middle" fill="#888" font-size="9">login / register</text>
+
+  <rect x="788" y="252" width="110" height="34" rx="6" fill="#22c55e" opacity="0.14" stroke="#22c55e" stroke-width="1.5"/>
+  <text x="843" y="269" text-anchor="middle" fill="#eee" font-weight="600">Onboarding</text>
+  <text x="843" y="281" text-anchor="middle" fill="#888" font-size="9">4-step wizard</text>
+
+  <line x1="340" y1="134" x2="75" y2="252" stroke="#666" stroke-width="0.8" opacity="0.25" marker-end="url(#arr)"/>
+  <line x1="345" y1="134" x2="203" y2="252" stroke="#666" stroke-width="0.8" opacity="0.25" marker-end="url(#arr)"/>
+  <line x1="355" y1="134" x2="331" y2="252" stroke="#666" stroke-width="0.8" opacity="0.25" marker-end="url(#arr)"/>
+  <line x1="370" y1="134" x2="459" y2="252" stroke="#666" stroke-width="0.8" opacity="0.25" marker-end="url(#arr)"/>
+  <line x1="380" y1="134" x2="587" y2="252" stroke="#666" stroke-width="0.8" opacity="0.25" marker-end="url(#arr)"/>
+  <line x1="390" y1="134" x2="715" y2="252" stroke="#666" stroke-width="0.8" opacity="0.25" marker-end="url(#arr)"/>
+  <line x1="395" y1="134" x2="843" y2="252" stroke="#666" stroke-width="0.8" opacity="0.25" marker-end="url(#arr)"/>
+
+  <!-- ROW 4: UI Components -->
+  <text x="480" y="330" text-anchor="middle" fill="#888" font-size="9" font-style="italic">── shared UI components ──</text>
+
+  <rect x="20" y="344" width="82" height="30" rx="5" fill="none" stroke="#555" stroke-width="1" stroke-dasharray="3 2"/>
+  <text x="61" y="364" text-anchor="middle" fill="#ccc" font-size="10">AiBlob</text>
+
+  <rect x="112" y="344" width="82" height="30" rx="5" fill="none" stroke="#555" stroke-width="1" stroke-dasharray="3 2"/>
+  <text x="153" y="364" text-anchor="middle" fill="#ccc" font-size="10">Toast</text>
+
+  <rect x="204" y="344" width="82" height="30" rx="5" fill="none" stroke="#555" stroke-width="1" stroke-dasharray="3 2"/>
+  <text x="245" y="364" text-anchor="middle" fill="#ccc" font-size="10">Card</text>
+
+  <rect x="296" y="344" width="82" height="30" rx="5" fill="none" stroke="#555" stroke-width="1" stroke-dasharray="3 2"/>
+  <text x="337" y="364" text-anchor="middle" fill="#ccc" font-size="10">Modal</text>
+
+  <rect x="388" y="344" width="82" height="30" rx="5" fill="none" stroke="#555" stroke-width="1" stroke-dasharray="3 2"/>
+  <text x="429" y="364" text-anchor="middle" fill="#ccc" font-size="10">Button</text>
+
+  <rect x="480" y="344" width="82" height="30" rx="5" fill="none" stroke="#555" stroke-width="1" stroke-dasharray="3 2"/>
+  <text x="521" y="364" text-anchor="middle" fill="#ccc" font-size="10">Reveal</text>
+
+  <rect x="572" y="344" width="82" height="30" rx="5" fill="none" stroke="#555" stroke-width="1" stroke-dasharray="3 2"/>
+  <text x="613" y="364" text-anchor="middle" fill="#ccc" font-size="10">Skeleton</text>
+
+  <rect x="664" y="344" width="82" height="30" rx="5" fill="none" stroke="#555" stroke-width="1" stroke-dasharray="3 2"/>
+  <text x="705" y="364" text-anchor="middle" fill="#ccc" font-size="10">CountUp</text>
+
+  <rect x="756" y="344" width="82" height="30" rx="5" fill="none" stroke="#555" stroke-width="1" stroke-dasharray="3 2"/>
+  <text x="797" y="364" text-anchor="middle" fill="#ccc" font-size="10">KoinLogo</text>
+
+  <rect x="848" y="344" width="98" height="30" rx="5" fill="none" stroke="#555" stroke-width="1" stroke-dasharray="3 2"/>
+  <text x="897" y="358" text-anchor="middle" fill="#ccc" font-size="10">CategoryDonut</text>
+  <text x="897" y="370" text-anchor="middle" fill="#ccc" font-size="9">IncomeExpenses</text>
+
+  <!-- ROW 5: Lib / Hooks -->
+  <text x="480" y="410" text-anchor="middle" fill="#888" font-size="9" font-style="italic">── lib / hooks ──</text>
+
+  <rect x="20" y="424" width="110" height="30" rx="5" fill="#f59e0b" opacity="0.12" stroke="#f59e0b" stroke-width="1.2"/>
+  <text x="75" y="439" text-anchor="middle" fill="#ccc" font-size="10" font-weight="600">supabase/client</text>
+  <text x="75" y="450" text-anchor="middle" fill="#888" font-size="9">createBrowserClient</text>
+
+  <rect x="144" y="424" width="110" height="30" rx="5" fill="#f59e0b" opacity="0.12" stroke="#f59e0b" stroke-width="1.2"/>
+  <text x="199" y="439" text-anchor="middle" fill="#ccc" font-size="10" font-weight="600">supabase/server</text>
+  <text x="199" y="450" text-anchor="middle" fill="#888" font-size="9">createServerClient</text>
+
+  <rect x="268" y="424" width="100" height="30" rx="5" fill="#f59e0b" opacity="0.12" stroke="#f59e0b" stroke-width="1.2"/>
+  <text x="318" y="444" text-anchor="middle" fill="#ccc" font-size="10" font-weight="600">money.ts</text>
+
+  <rect x="382" y="424" width="100" height="30" rx="5" fill="#f59e0b" opacity="0.12" stroke="#f59e0b" stroke-width="1.2"/>
+  <text x="432" y="444" text-anchor="middle" fill="#ccc" font-size="10" font-weight="600">csv.ts</text>
+
+  <rect x="496" y="424" width="100" height="30" rx="5" fill="#f59e0b" opacity="0.12" stroke="#f59e0b" stroke-width="1.2"/>
+  <text x="546" y="444" text-anchor="middle" fill="#ccc" font-size="10" font-weight="600">utils.ts</text>
+
+  <rect x="610" y="424" width="160" height="30" rx="5" fill="#f59e0b" opacity="0.12" stroke="#f59e0b" stroke-width="1.2"/>
+  <text x="690" y="444" text-anchor="middle" fill="#ccc" font-size="10" font-weight="600">useProfileCurrency</text>
+
+  <rect x="784" y="424" width="120" height="30" rx="5" fill="#f59e0b" opacity="0.12" stroke="#f59e0b" stroke-width="1.2"/>
+  <text x="844" y="444" text-anchor="middle" fill="#ccc" font-size="10" font-weight="600">sample-data.ts</text>
+
+  <!-- tested badges -->
+  <rect x="268" y="462" width="54" height="14" rx="3" fill="#22c55e" opacity="0.18"/>
+  <text x="295" y="472" text-anchor="middle" fill="#22c55e" font-size="8" font-weight="700">✓ tested</text>
+  <rect x="382" y="462" width="54" height="14" rx="3" fill="#22c55e" opacity="0.18"/>
+  <text x="409" y="472" text-anchor="middle" fill="#22c55e" font-size="8" font-weight="700">✓ tested</text>
+
+  <!-- ROW 6: API Routes -->
+  <text x="480" y="500" text-anchor="middle" fill="#888" font-size="9" font-style="italic">── API routes (edge runtime) ──</text>
+
+  <rect x="260" y="512" width="160" height="34" rx="6" fill="#22c55e" opacity="0.08" stroke="#22c55e" stroke-width="1.2" stroke-dasharray="4 2"/>
+  <text x="340" y="529" text-anchor="middle" fill="#eee" font-weight="600">POST /api/chat</text>
+  <text x="340" y="541" text-anchor="middle" fill="#888" font-size="9">SSE stream → OpenAI</text>
+
+  <rect x="440" y="512" width="180" height="34" rx="6" fill="#22c55e" opacity="0.08" stroke="#22c55e" stroke-width="1.2" stroke-dasharray="4 2"/>
+  <text x="530" y="529" text-anchor="middle" fill="#eee" font-weight="600">POST /api/categorize</text>
+  <text x="530" y="541" text-anchor="middle" fill="#888" font-size="9">batch AI categorization</text>
+
+  <line x1="459" y1="286" x2="340" y2="512" stroke="#22c55e" stroke-width="1.2" stroke-dasharray="5 3" opacity="0.5" marker-end="url(#arr-api)"/>
+  <line x1="587" y1="286" x2="530" y2="512" stroke="#22c55e" stroke-width="1.2" stroke-dasharray="5 3" opacity="0.5" marker-end="url(#arr-api)"/>
+
+  <!-- ROW 7: External services -->
+  <text x="480" y="580" text-anchor="middle" fill="#888" font-size="9" font-style="italic">── external services ──</text>
+
+  <rect x="100" y="592" width="180" height="34" rx="6" fill="none" stroke="#555" stroke-width="1" opacity="0.6"/>
+  <text x="190" y="613" text-anchor="middle" fill="#aaa" font-size="10">Supabase (DB + Auth)</text>
+
+  <rect x="320" y="592" width="160" height="34" rx="6" fill="none" stroke="#555" stroke-width="1" opacity="0.6"/>
+  <text x="400" y="613" text-anchor="middle" fill="#aaa" font-size="10">OpenAI API</text>
+
+  <line x1="75" y1="454" x2="190" y2="592" stroke="#666" stroke-width="0.8" opacity="0.3" marker-end="url(#arr)"/>
+  <line x1="199" y1="454" x2="200" y2="592" stroke="#666" stroke-width="0.8" opacity="0.3" marker-end="url(#arr)"/>
+  <line x1="340" y1="546" x2="395" y2="592" stroke="#666" stroke-width="0.8" opacity="0.3" marker-end="url(#arr)"/>
+  <line x1="530" y1="546" x2="410" y2="592" stroke="#666" stroke-width="0.8" opacity="0.3" marker-end="url(#arr)"/>
+
+  <!-- koin-profile-change event -->
+  <rect x="620" y="592" width="190" height="34" rx="6" fill="none" stroke="#555" stroke-width="1" opacity="0.5" stroke-dasharray="3 2"/>
+  <text x="715" y="607" text-anchor="middle" fill="#999" font-size="9">CustomEvent</text>
+  <text x="715" y="619" text-anchor="middle" fill="#aaa" font-size="10">koin-profile-change</text>
+
+  <line x1="587" y1="286" x2="715" y2="592" stroke="#666" stroke-width="0.8" opacity="0.2" stroke-dasharray="3 2"/>
+  <line x1="220" y1="204" x2="715" y2="592" stroke="#666" stroke-width="0.8" opacity="0.2" stroke-dasharray="3 2"/>
+</svg>
