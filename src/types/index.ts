@@ -14,13 +14,15 @@ export type TransactionCategory =
   | "other";
 
 export interface Transaction {
-  id: string;
+  id: number;
   user_id: string;
-  type: TransactionType;
+  transaction_type: TransactionType;
   amount: number;
-  category: TransactionCategory;
-  description: string;
+  name: string;
+  category_id: number | null;
+  categories?: { name: string } | null;
   date: string; // ISO 8601
+  currency: string;
   created_at: string;
 }
 

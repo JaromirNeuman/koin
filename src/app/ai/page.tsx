@@ -412,14 +412,25 @@ export default function AiPage() {
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        const chunk = decoder.decode(value, { stream: true });
-        if (chunk) appendToLast(chunk);
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          const chunk = decoder.decode(value, { stream: true });
+          if (chunk) appendToLast(chunk);
+        }
+        setStreaming(false);
+      } catch {
+        // Stream interrupted mid-way — remove the orphan empty message and fall
+        // back to demo mode so the user always gets a response.
+        setMessages((current) => {
+          const next = [...current];
+          if (next[next.length - 1]?.content === "") next.pop();
+          return next;
+        });
+        setStreaming(false);
+        simulateReply(prompt);
       }
-
-      setStreaming(false);
     } catch {
       simulateReply(prompt);
     }
