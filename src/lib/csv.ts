@@ -3,7 +3,12 @@
 export type CsvRow = Record<string, string | number>;
 
 function escapeCell(value: string | number): string {
-  const s = String(value ?? "");
+  let s = String(value ?? "");
+  // CSV formula-injection guard: neutralize cells a spreadsheet would treat
+  // as a formula (=, +, -, @, tab, CR) by prefixing an apostrophe.
+  if (/^[=+\-@\t\r]/.test(s)) {
+    s = `'${s}`;
+  }
   // Quote if the cell contains a delimiter, quote, or newline.
   if (/[",\n;]/.test(s)) {
     return `"${s.replace(/"/g, '""')}"`;

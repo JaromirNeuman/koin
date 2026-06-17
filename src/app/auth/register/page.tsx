@@ -14,34 +14,7 @@ import {
 } from "@/components/layout/page-transition";
 import { AuthBackgroundCards } from "@/components/layout/auth-bg-cards";
 import { createClient } from "@/lib/supabase/client";
-
-const REQUIREMENTS = [
-  {
-    id: "length",
-    label: "Alespoň 8 znaků",
-    test: (p: string) => p.length >= 8,
-  },
-  {
-    id: "uppercase",
-    label: "Velké písmeno",
-    test: (p: string) => /[A-Z]/.test(p),
-  },
-  {
-    id: "lowercase",
-    label: "Malé písmeno",
-    test: (p: string) => /[a-z]/.test(p),
-  },
-  { id: "number", label: "Číslo", test: (p: string) => /[0-9]/.test(p) },
-  {
-    id: "special",
-    label: "Speciální znak (!@#$…)",
-    test: (p: string) => /[^A-Za-z0-9]/.test(p),
-  },
-] as const;
-
-function getStrength(password: string): number {
-  return REQUIREMENTS.filter((r) => r.test(password)).length;
-}
+import { REQUIREMENTS, getStrength, validateRegisterInput } from "./register-utils";
 
 const STRENGTH_LABELS = [
   "",
@@ -81,14 +54,13 @@ export default function RegisterPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (strength < REQUIREMENTS.length) {
-      setError("Heslo nesplňuje všechny požadavky.");
+    
+    const validationError = validateRegisterInput(name, email, password, confirmPassword);
+    if (validationError) {
+      setError(validationError);
       return;
     }
-    if (password !== confirmPassword) {
-      setError("Hesla se neshodují.");
-      return;
-    }
+
     setError(null);
     setLoading(true);
 

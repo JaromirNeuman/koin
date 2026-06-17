@@ -14,6 +14,7 @@ import {
 } from "@/components/layout/page-transition";
 import { AuthBackgroundCards } from "@/components/layout/auth-bg-cards";
 import { createClient } from "@/lib/supabase/client"
+import { validateLoginInput } from "./login-utils";
 
 export default function LoginPage() {
   const { navigate } = usePageTransition();
@@ -21,10 +22,19 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
+    setErrorMsg(null);
+
+    const validationError = validateLoginInput(email, password);
+    if (validationError) {
+      setErrorMsg(validationError);
+      setLoading(false);
+      return;
+    }
 
     const supabase = createClient();
 
@@ -34,7 +44,7 @@ export default function LoginPage() {
     });
 
     if (error) {
-      alert(error.message);
+      setErrorMsg("Nesprávný e-mail nebo heslo."); 
       setLoading(false);
       return;
     }
@@ -69,6 +79,18 @@ export default function LoginPage() {
             </div>
 
             <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+              <AnimatePresence>
+                {errorMsg && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0, marginBottom: 0 }}
+                    animate={{ opacity: 1, height: "auto", marginBottom: 4 }}
+                    exit={{ opacity: 0, height: 0, marginBottom: 0 }}
+                    className="rounded-md bg-red-500/15 p-3 text-[13px] font-medium text-red-500 border border-red-500/20"
+                  >
+                    {errorMsg}
+                  </motion.div>
+                )}
+              </AnimatePresence>
               <div className="flex flex-col gap-2">
                 <Label htmlFor="email">E-mail</Label>
                 <Input
