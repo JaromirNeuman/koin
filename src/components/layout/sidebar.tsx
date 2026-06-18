@@ -75,6 +75,8 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   }
 
   function go(href: string) {
+    if (pathname === href) return;
+
     navigate(href);
     onNavigate?.();
   }

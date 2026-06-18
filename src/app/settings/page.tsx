@@ -189,7 +189,19 @@ export default function SettingsPage() {
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-6 py-7 lg:px-10">
-      <PageHeader title="Nastavení" subtitle={`${currentMonthYear} · ${timeAgoText}`} />
+      <PageHeader 
+        title="Nastavení" 
+        subtitle={
+          <span className="flex items-center">
+            {currentMonthYear}
+            <span className="relative mx-2 flex size-1.5">
+              <span className="absolute inline-flex size-full animate-ping rounded-full bg-emerald-400/70" />
+              <span className="relative inline-flex size-1.5 rounded-full bg-emerald-400" />
+            </span>
+            {timeAgoText}
+          </span>
+        } 
+      />
 
       {loading ? (
         <div className="grid gap-5 lg:grid-cols-2">
@@ -230,7 +242,7 @@ export default function SettingsPage() {
                       className="h-10 rounded-lg border border-input bg-input/30 px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
                     >
                       {CURRENCIES.map((c) => (
-                        <option key={c.code} value={c.code}>
+                        <option key={c.code} value={c.code} className="bg-zinc-900 text-foreground">
                           {c.label}
                         </option>
                       ))}

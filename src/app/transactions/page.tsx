@@ -282,7 +282,16 @@ export default function TransactionsPage() {
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-5 px-4 py-5 sm:gap-6 sm:px-6 sm:py-7 lg:px-10">
       <PageHeader
         title="Transakce"
-        subtitle={`${currentMonthYear} · ${timeAgoText}`}
+        subtitle={
+          <span className="flex items-center">
+            {currentMonthYear}
+            <span className="relative mx-2 flex size-1.5">
+              <span className="absolute inline-flex size-full animate-ping rounded-full bg-emerald-400/70" />
+              <span className="relative inline-flex size-1.5 rounded-full bg-emerald-400" />
+            </span>
+            {timeAgoText}
+          </span>
+        }
         actions={
           <Button
             className="h-9 w-full gap-2 bg-primary px-3 text-primary-foreground sm:w-auto"
