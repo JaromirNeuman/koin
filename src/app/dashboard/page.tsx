@@ -1131,6 +1131,7 @@ function DashboardDialogs({
               defaultValue={new Date().toISOString().slice(0, 10)}
               required
               disabled={submitting}
+              className="dark:[&::-webkit-calendar-picker-indicator]:invert"
             />
           </div>
           <div className="grid gap-2">

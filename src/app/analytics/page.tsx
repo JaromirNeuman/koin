@@ -181,6 +181,35 @@ function AnalyticsPageContent() {
   const [bestMonth, setBestMonth] = useState<MonthlyData | null>(null);
   const [avgDailySpend, setAvgDailySpend] = useState(0);
 
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [timeAgoText, setTimeAgoText] = useState("aktualizováno právě teď");
+
+  useEffect(() => {
+    if (!lastUpdated) return;
+
+    function updateText() {
+      const now = new Date();
+      const diffInMinutes = Math.floor(
+        (now.getTime() - lastUpdated!.getTime()) / 60000,
+      );
+
+      if (diffInMinutes < 1) {
+        setTimeAgoText("aktualizováno právě teď");
+      } else if (diffInMinutes === 1) {
+        setTimeAgoText("aktualizováno před 1 minutou");
+      } else if (diffInMinutes < 5) {
+        setTimeAgoText(`aktualizováno před ${diffInMinutes} minutami`);
+      } else {
+        setTimeAgoText(`aktualizováno před ${diffInMinutes} min`);
+      }
+    }
+
+    updateText();
+    const interval = setInterval(updateText, 60000);
+
+    return () => clearInterval(interval);
+  }, [lastUpdated]);
+
   useEffect(() => {
     async function fetchAndCalculateAnalytics() {
       try {
@@ -232,12 +261,12 @@ function AnalyticsPageContent() {
           "Feb",
           "Mar",
           "Apr",
-          "Maj",
+          "May",
           "Jun",
           "Jul",
           "Aug",
           "Sep",
-          "Okt",
+          "Oct",
           "Nov",
           "Dec",
         ];
@@ -309,6 +338,7 @@ function AnalyticsPageContent() {
         console.error("Chyba při výpočtu analytiky:", err);
       } finally {
         setLoading(false);
+        setLastUpdated(new Date());
       }
     }
 
@@ -319,7 +349,16 @@ function AnalyticsPageContent() {
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-5 px-4 py-5 sm:gap-6 sm:px-6 sm:py-7 lg:px-10">
       <PageHeader
         title="Analytika"
-        subtitle={`Přehled za rok ${selectedYear} · Aktualizováno právě teď`}
+        subtitle={
+          <span className="flex items-center">
+            Přehled za rok {selectedYear}
+            <span className="relative mx-2 flex size-1.5">
+              <span className="absolute inline-flex size-full animate-ping rounded-full bg-emerald-400/70" />
+              <span className="relative inline-flex size-1.5 rounded-full bg-emerald-400" />
+            </span>
+            {timeAgoText}
+          </span>
+        }
       />
 
       {loading ? (
